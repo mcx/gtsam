@@ -20,11 +20,15 @@
 #include <gtsam/base/treeTraversal-inst.h>
 #include <gtsam/discrete/DiscreteBayesNet.h>
 #include <gtsam/discrete/DiscreteFactorGraph.h>
+#include <gtsam/discrete/TableDistribution.h>
 #include <gtsam/hybrid/HybridBayesNet.h>
 #include <gtsam/hybrid/HybridBayesTree.h>
+#include <gtsam/hybrid/HybridConditional.h>
 #include <gtsam/inference/BayesTree-inst.h>
 #include <gtsam/inference/BayesTreeCliqueBase-inst.h>
 #include <gtsam/linear/GaussianJunctionTree.h>
+
+#include <memory>
 
 namespace gtsam {
 
@@ -39,18 +43,35 @@ bool HybridBayesTree::equals(const This& other, double tol) const {
 }
 
 /* ************************************************************************* */
+DiscreteValues HybridBayesTree::discreteMaxProduct(
+    const DiscreteFactorGraph& dfg) const {
+  DiscreteFactor::shared_ptr product = dfg.scaledProduct();
+
+  // Check type of product, and get as TableFactor for efficiency.
+  TableFactor p;
+  if (auto tf = std::dynamic_pointer_cast<TableFactor>(product)) {
+    p = *tf;
+  } else {
+    p = TableFactor(product->toDecisionTreeFactor());
+  }
+  DiscreteValues assignment = TableDistribution(p).argmax();
+  return assignment;
+}
+
+/* ************************************************************************* */
 HybridValues HybridBayesTree::optimize() const {
-  DiscreteBayesNet dbn;
+  DiscreteFactorGraph discrete_fg;
   DiscreteValues mpe;
 
   auto root = roots_.at(0);
   // Access the clique and get the underlying hybrid conditional
   HybridConditional::shared_ptr root_conditional = root->conditional();
 
-  // The root should be discrete only, we compute the MPE
+  //  The root should be discrete only, we compute the MPE
   if (root_conditional->isDiscrete()) {
-    dbn.push_back(root_conditional->asDiscrete());
-    mpe = DiscreteFactorGraph(dbn).optimize();
+    auto discrete = root_conditional->asDiscrete<TableDistribution>();
+    discrete_fg.push_back(discrete);
+    mpe = discreteMaxProduct(discrete_fg);
   } else {
     throw std::runtime_error(
         "HybridBayesTree root is not discrete-only. Please check elimination "
@@ -109,7 +130,7 @@ struct HybridAssignmentData {
 
     GaussianConditional::shared_ptr conditional;
     if (hybrid_conditional->isHybrid()) {
-      conditional = (*hybrid_conditional->asMixture())(parentData.assignment_);
+      conditional = (*hybrid_conditional->asHybrid())(parentData.assignment_);
     } else if (hybrid_conditional->isContinuous()) {
       conditional = hybrid_conditional->asGaussian();
     } else {
@@ -136,8 +157,7 @@ struct HybridAssignmentData {
   }
 };
 
-/* *************************************************************************
- */
+/* ************************************************************************* */
 GaussianBayesTree HybridBayesTree::choose(
     const DiscreteValues& assignment) const {
   GaussianBayesTree gbt;
@@ -157,8 +177,12 @@ GaussianBayesTree HybridBayesTree::choose(
   return gbt;
 }
 
-/* *************************************************************************
- */
+/* ************************************************************************* */
+double HybridBayesTree::error(const HybridValues& values) const {
+  return HybridGaussianFactorGraph(*this).error(values);
+}
+
+/* ************************************************************************* */
 VectorValues HybridBayesTree::optimize(const DiscreteValues& assignment) const {
   GaussianBayesTree gbt = this->choose(assignment);
   // If empty GaussianBayesTree, means a clique is pruned hence invalid
@@ -173,19 +197,19 @@ VectorValues HybridBayesTree::optimize(const DiscreteValues& assignment) const {
 
 /* ************************************************************************* */
 void HybridBayesTree::prune(const size_t maxNrLeaves) {
-  auto decisionTree =
-      this->roots_.at(0)->conditional()->asDiscrete();
+  auto prunedDiscreteProbs =
+      this->roots_.at(0)->conditional()->asDiscrete<TableDistribution>();
 
-  DecisionTreeFactor prunedDecisionTree = decisionTree->prune(maxNrLeaves);
-  decisionTree->root_ = prunedDecisionTree.root_;
+  // Imperative pruning
+  prunedDiscreteProbs->prune(maxNrLeaves);
 
   /// Helper struct for pruning the hybrid bayes tree.
   struct HybridPrunerData {
     /// The discrete decision tree after pruning.
-    DecisionTreeFactor prunedDecisionTree;
-    HybridPrunerData(const DecisionTreeFactor& prunedDecisionTree,
+    DiscreteConditional::shared_ptr prunedDiscreteProbs;
+    HybridPrunerData(const DiscreteConditional::shared_ptr& prunedDiscreteProbs,
                      const HybridBayesTree::sharedNode& parentClique)
-        : prunedDecisionTree(prunedDecisionTree) {}
+        : prunedDiscreteProbs(prunedDiscreteProbs) {}
 
     /**
      * @brief A function used during tree traversal that operates on each node
@@ -203,15 +227,19 @@ void HybridBayesTree::prune(const size_t maxNrLeaves) {
 
       // If conditional is hybrid, we prune it.
       if (conditional->isHybrid()) {
-        auto gaussianMixture = conditional->asMixture();
+        auto hybridGaussianCond = conditional->asHybrid();
 
-        gaussianMixture->prune(parentData.prunedDecisionTree);
+        if (!hybridGaussianCond->pruned()) {
+          // Imperative
+          clique->conditional() = std::make_shared<HybridConditional>(
+              hybridGaussianCond->prune(*parentData.prunedDiscreteProbs));
+        }
       }
       return parentData;
     }
   };
 
-  HybridPrunerData rootData(prunedDecisionTree, 0);
+  HybridPrunerData rootData(prunedDiscreteProbs, 0);
   {
     treeTraversal::no_op visitorPost;
     // Limits OpenMP threads since we're mixing TBB and OpenMP

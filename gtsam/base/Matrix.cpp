@@ -24,12 +24,14 @@
 #include <Eigen/LU>
 
 #include <cstdarg>
+#include <cassert>
 #include <cstring>
 #include <iomanip>
 #include <list>
 #include <fstream>
 #include <limits>
 #include <iostream>
+#include <iterator>
 
 using namespace std;
 
@@ -124,17 +126,6 @@ bool linear_dependent(const Matrix& A, const Matrix& B, double tol) {
 }
 
 /* ************************************************************************* */
-Vector operator^(const Matrix& A, const Vector & v) {
-  if (A.rows()!=v.size()) {
-    throw std::invalid_argument("Matrix operator^ : A.m(" + std::to_string(A.rows()) + ")!=v.size(" +
-                                std::to_string(v.size()) + ")");
-  }
-//  Vector vt = v.transpose();
-//  Vector vtA = vt * A;
-//  return vtA.transpose();
-  return A.transpose() * v;
-}
-
 const Eigen::IOFormat& matlabFormat() {
   static const Eigen::IOFormat matlab(
     Eigen::StreamPrecision, // precision

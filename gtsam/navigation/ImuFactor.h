@@ -37,13 +37,9 @@ typedef ManifoldPreintegration PreintegrationType;
 
 /*
  * If you are using the factor, please cite:
- * L. Carlone, Z. Kira, C. Beall, V. Indelman, F. Dellaert, "Eliminating
- * conditionally independent sets in factor graphs: a unifying perspective based
- * on smart factors", Int. Conf. on Robotics and Automation (ICRA), 2014.
- *
- * C. Forster, L. Carlone, F. Dellaert, D. Scaramuzza, "IMU Preintegration on
- * Manifold for Efficient Visual-Inertial Maximum-a-Posteriori Estimation",
- * Robotics: Science and Systems (RSS), 2015.
+ * Christian Forster, Luca Carlone, Frank Dellaert, and Davide Scaramuzza,
+ * "On-Manifold Preintegration for Real-Time Visual-Inertial Odometry", IEEE
+ * Transactions on Robotics, 2017.
  *
  * REFERENCES:
  * [1] G.S. Chirikjian, "Stochastic Models, Information Theory, and Lie Groups",
@@ -54,8 +50,8 @@ typedef ManifoldPreintegration PreintegrationType;
  * [3] L. Carlone, S. Williams, R. Roberts, "Preintegrated IMU factor:
  *     Computation of the Jacobian Matrices", Tech. Report, 2013.
  *     Available in this repo as "PreintegratedIMUJacobians.pdf".
- * [4] C. Forster, L. Carlone, F. Dellaert, D. Scaramuzza, "IMU Preintegration on
- *     Manifold for Efficient Visual-Inertial Maximum-a-Posteriori Estimation",
+ * [4] C. Forster, L. Carlone, F. Dellaert, D. Scaramuzza, "IMU Preintegration
+ * on Manifold for Efficient Visual-Inertial Maximum-a-Posteriori Estimation",
  *     Robotics: Science and Systems (RSS), 2015.
  */
 
@@ -83,7 +79,7 @@ public:
 
   /// Default constructor for serialization and wrappers
   PreintegratedImuMeasurements() {
-    preintMeasCov_.setZero();
+    resetIntegration();
   }
 
  /**
@@ -94,7 +90,7 @@ public:
   PreintegratedImuMeasurements(const std::shared_ptr<PreintegrationParams>& p,
       const imuBias::ConstantBias& biasHat = imuBias::ConstantBias()) :
       PreintegrationType(p, biasHat) {
-    preintMeasCov_.setZero();
+    resetIntegration();
   }
 
 /**
@@ -105,6 +101,7 @@ public:
   PreintegratedImuMeasurements(const PreintegrationType& base, const Matrix9& preintMeasCov)
      : PreintegrationType(base),
        preintMeasCov_(preintMeasCov) {
+    PreintegrationType::resetIntegration();
   }
 
   /// Virtual destructor
@@ -117,7 +114,7 @@ public:
   /// equals
   bool equals(const PreintegratedImuMeasurements& expected, double tol = 1e-9) const;
 
-  /// Re-initialize PreintegratedIMUMeasurements
+  /// Re-initialize PreintegratedImuMeasurements
   void resetIntegration() override;
 
   /**
@@ -146,7 +143,7 @@ public:
 #endif
 
  private:
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION  ///
+#if GTSAM_ENABLE_BOOST_SERIALIZATION  ///
   /// Serialization function
   friend class boost::serialization::access;
   template<class ARCHIVE>
@@ -163,7 +160,7 @@ public:
  * the vehicle at previous time step), current state (pose and velocity at
  * current time step), and the bias estimate. Following the preintegration
  * scheme proposed in [2], the ImuFactor includes many IMU measurements, which
- * are "summarized" using the PreintegratedIMUMeasurements class.
+ * are "summarized" using the PreintegratedImuMeasurements class.
  * Note that this factor does not model "temporal consistency" of the biases
  * (which are usually slowly varying quantities), which is up to the caller.
  * See also CombinedImuFactor for a class that does this for you.
@@ -248,7 +245,7 @@ public:
 
  private:
   /** Serialization function */
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
   friend class boost::serialization::access;
   template<class ARCHIVE>
   void serialize(ARCHIVE & ar, const unsigned int /*version*/) {
@@ -320,7 +317,7 @@ public:
 
 private:
 
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
   /** Serialization function */
   friend class boost::serialization::access;
   template<class ARCHIVE>

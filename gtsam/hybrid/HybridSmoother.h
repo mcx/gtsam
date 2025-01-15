@@ -24,7 +24,7 @@
 
 namespace gtsam {
 
-class HybridSmoother {
+class GTSAM_EXPORT HybridSmoother {
  private:
   HybridBayesNet hybridBayesNet_;
   HybridGaussianFactorGraph remainingFactorGraph_;
@@ -34,23 +34,24 @@ class HybridSmoother {
    * Given new factors, perform an incremental update.
    * The relevant densities in the `hybridBayesNet` will be added to the input
    * graph (fragment), and then eliminated according to the `ordering`
-   * presented. The remaining factor graph contains Gaussian mixture factors
+   * presented. The remaining factor graph contains hybrid Gaussian factors
    * that are not connected to the variables in the ordering, or a single
    * discrete factor on all discrete keys, plus all discrete factors in the
    * original graph.
    *
-   * \note If maxComponents is given, we look at the discrete factor resulting
+   * \note If maxNrLeaves is given, we look at the discrete factor resulting
    * from this elimination, and prune it and the Gaussian components
    * corresponding to the pruned choices.
    *
    * @param graph The new factors, should be linear only
-   * @param ordering The ordering for elimination, only continuous vars are
-   * allowed
    * @param maxNrLeaves The maximum number of leaves in the new discrete factor,
    * if applicable
+   * @param given_ordering The (optional) ordering for elimination, only
+   * continuous variables are allowed
    */
-  void update(HybridGaussianFactorGraph graph, const Ordering& ordering,
-              std::optional<size_t> maxNrLeaves = {});
+  void update(HybridGaussianFactorGraph graph,
+              std::optional<size_t> maxNrLeaves = {},
+              const std::optional<Ordering> given_ordering = {});
 
   Ordering getOrdering(const HybridGaussianFactorGraph& newFactors);
 
@@ -67,11 +68,17 @@ class HybridSmoother {
       const HybridGaussianFactorGraph& graph,
       const HybridBayesNet& hybridBayesNet, const Ordering& ordering) const;
 
-  /// Get the Gaussian Mixture from the Bayes Net posterior at `index`.
-  GaussianMixture::shared_ptr gaussianMixture(size_t index) const;
+  /**
+   * @brief Get the hybrid Gaussian conditional from
+   * the Bayes Net posterior at `index`.
+   *
+   * @param index Indexing value.
+   * @return HybridGaussianConditional::shared_ptr
+   */
+  HybridGaussianConditional::shared_ptr gaussianMixture(size_t index) const;
 
   /// Return the Bayes Net posterior.
   const HybridBayesNet& hybridBayesNet() const;
 };
 
-};  // namespace gtsam
+}  // namespace gtsam

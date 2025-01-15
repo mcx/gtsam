@@ -10,7 +10,7 @@
  * -------------------------------------------------------------------------- */
 
 /**
- * @file HybridGaussianISAM.h
+ * @file HybridGaussianISAM.cpp
  * @date March 31, 2022
  * @author Fan Jiang
  * @author Frank Dellaert
@@ -70,8 +70,7 @@ Ordering HybridGaussianISAM::GetOrdering(
 /* ************************************************************************* */
 void HybridGaussianISAM::updateInternal(
     const HybridGaussianFactorGraph& newFactors,
-    HybridBayesTree::Cliques* orphans,
-    const std::optional<size_t>& maxNrLeaves,
+    HybridBayesTree::Cliques* orphans, const std::optional<size_t>& maxNrLeaves,
     const std::optional<Ordering>& ordering,
     const HybridBayesTree::Eliminate& function) {
   // Remove the contaminated part of the Bayes tree
@@ -101,11 +100,17 @@ void HybridGaussianISAM::updateInternal(
   }
 
   // eliminate all factors (top, added, orphans) into a new Bayes tree
-  HybridBayesTree::shared_ptr bayesTree =
-      factors.eliminateMultifrontal(elimination_ordering, function, std::cref(index));
+  HybridBayesTree::shared_ptr bayesTree = factors.eliminateMultifrontal(
+      elimination_ordering, function, std::cref(index));
 
   if (maxNrLeaves) {
+#if GTSAM_HYBRID_TIMING
+    gttic_(HybridBayesTreePrune);
+#endif
     bayesTree->prune(*maxNrLeaves);
+#if GTSAM_HYBRID_TIMING
+    gttoc_(HybridBayesTreePrune);
+#endif
   }
 
   // Re-add into Bayes tree data structures

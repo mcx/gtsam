@@ -24,7 +24,7 @@
 #include <gtsam/global_includes.h>
 #include <gtsam/inference/VariableSlots.h>
 
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
 #include <boost/serialization/version.hpp>
 #include <boost/serialization/split_member.hpp>
 #endif
@@ -116,6 +116,8 @@ namespace gtsam {
 
     /** Conversion from HessianFactor (does Cholesky to obtain Jacobian matrix) */
     explicit JacobianFactor(const HessianFactor& hf);
+
+    JacobianFactor& operator=(const JacobianFactor& jf) = default;
 
     /** default constructor for I/O */
     JacobianFactor();
@@ -312,6 +314,12 @@ namespace gtsam {
     /** Get a view of the A matrix */
     ABlock getA() { return Ab_.range(0, size()); }
 
+    /**
+     * Get a view of the A matrix for the variable
+     * pointed to by the given key.
+     */
+    ABlock getA(const Key& key) { return Ab_(find(key) - begin()); }
+
     /** Update an information matrix by adding the information corresponding to this factor
      * (used internally during elimination).
      * @param scatter A mapping from variable index to slot index in this HessianFactor
@@ -415,7 +423,7 @@ namespace gtsam {
     // be very selective on who can access these private methods:
     template<typename T> friend class ExpressionFactor;
 
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
     /** Serialization function */
     friend class boost::serialization::access;
     template<class ARCHIVE>
@@ -462,7 +470,7 @@ struct traits<JacobianFactor> : public Testable<JacobianFactor> {
 
 } // \ namespace gtsam
 
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
 BOOST_CLASS_VERSION(gtsam::JacobianFactor, 1)
 #endif
 

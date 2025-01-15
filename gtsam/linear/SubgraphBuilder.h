@@ -21,7 +21,7 @@
 #include <gtsam/base/types.h>
 #include <gtsam/dllexport.h>
 
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
 #include <boost/serialization/version.hpp>
 #include <boost/serialization/nvp.hpp>
 #endif
@@ -51,7 +51,7 @@ class GTSAM_EXPORT Subgraph {
     friend std::ostream &operator<<(std::ostream &os, const Edge &edge);
 
    private:
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
     friend class boost::serialization::access;
     template <class Archive>
     void serialize(Archive &ar, const unsigned int /*version*/) {
@@ -87,7 +87,7 @@ class GTSAM_EXPORT Subgraph {
   friend std::ostream &operator<<(std::ostream &os, const Subgraph &subgraph);
 
  private:
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
   friend class boost::serialization::access;
   template <class Archive>
   void serialize(Archive &ar, const unsigned int /*version*/) {
@@ -182,7 +182,7 @@ GaussianFactorGraph buildFactorSubgraph(const GaussianFactorGraph &gfg,
 
 /** Split the graph into a subgraph and the remaining edges. 
  * Note that the remaining factorgraph has null factors. */
-std::pair<GaussianFactorGraph, GaussianFactorGraph> splitFactorGraph(
+std::pair<GaussianFactorGraph, GaussianFactorGraph> GTSAM_EXPORT splitFactorGraph(
     const GaussianFactorGraph &factorGraph, const Subgraph &subgraph);
 
 }  // namespace gtsam

@@ -18,9 +18,11 @@
 
 #pragma once
 
+#include <gtsam/base/Testable.h>
+#include <gtsam/discrete/AlgebraicDecisionTree.h>
 #include <gtsam/discrete/DiscreteValues.h>
 #include <gtsam/inference/Factor.h>
-#include <gtsam/base/Testable.h>
+#include <gtsam/inference/Ordering.h>
 
 #include <string>
 namespace gtsam {
@@ -35,36 +37,48 @@ class HybridValues;
  *
  * @ingroup discrete
  */
-class GTSAM_EXPORT DiscreteFactor: public Factor {
-
-public:
-
+class GTSAM_EXPORT DiscreteFactor : public Factor {
+ public:
   // typedefs needed to play nice with gtsam
-  typedef DiscreteFactor This; ///< This class
-  typedef std::shared_ptr<DiscreteFactor> shared_ptr; ///< shared_ptr to this class
-  typedef Factor Base; ///< Our base class
+  typedef DiscreteFactor This;  ///< This class
+  typedef std::shared_ptr<DiscreteFactor>
+      shared_ptr;       ///< shared_ptr to this class
+  typedef Factor Base;  ///< Our base class
 
-  using Values = DiscreteValues; ///< backwards compatibility
+  using Values = DiscreteValues;  ///< backwards compatibility
 
-public:
+  using Unary = std::function<double(const double&)>;
+  using UnaryAssignment =
+      std::function<double(const Assignment<Key>&, const double&)>;
+  using Binary = std::function<double(const double, const double)>;
 
+ protected:
+  /// Map of Keys and their cardinalities.
+  std::map<Key, size_t> cardinalities_;
+
+ public:
   /// @name Standard Constructors
   /// @{
 
   /** Default constructor creates empty factor */
   DiscreteFactor() {}
 
-  /** Construct from container of keys.  This constructor is used internally from derived factor
-   *  constructors, either from a container of keys or from a boost::assign::list_of. */
-  template<typename CONTAINER>
-  DiscreteFactor(const CONTAINER& keys) : Base(keys) {}
+  /**
+   * Construct from container of keys and map of cardinalities.
+   * This constructor is used internally from derived factor constructors,
+   * either from a container of keys or from a boost::assign::list_of.
+   */
+  template <typename CONTAINER>
+  DiscreteFactor(const CONTAINER& keys,
+                 const std::map<Key, size_t> cardinalities = {})
+      : Base(keys), cardinalities_(cardinalities) {}
 
   /// @}
   /// @name Testable
   /// @{
 
   /// equals
-  virtual bool equals(const DiscreteFactor& lf, double tol = 1e-9) const = 0;
+  virtual bool equals(const DiscreteFactor& lf, double tol = 1e-9) const;
 
   /// print
   void print(
@@ -77,11 +91,31 @@ public:
   /// @name Standard Interface
   /// @{
 
+  /// Return all the discrete keys associated with this factor.
+  DiscreteKeys discreteKeys() const;
+
+  std::map<Key, size_t> cardinalities() const { return cardinalities_; }
+
+  size_t cardinality(Key j) const { return cardinalities_.at(j); }
+
+  /**
+   * @brief Calculate probability for given values.
+   * Calls specialized evaluation under the hood.
+   *
+   * Note: Uses Assignment<Key> as it is the base class of DiscreteValues.
+   *
+   * @param values Discrete assignment.
+   * @return double
+   */
+  virtual double evaluate(const Assignment<Key>& values) const = 0;
+
   /// Find value for given assignment of values to variables
-  virtual double operator()(const DiscreteValues&) const = 0;
+  double operator()(const DiscreteValues& values) const {
+    return evaluate(values);
+  }
 
   /// Error is just -log(value)
-  double error(const DiscreteValues& values) const;
+  virtual double error(const DiscreteValues& values) const;
 
   /**
    * The Factor::error simply extracts the \class DiscreteValues from the
@@ -89,15 +123,51 @@ public:
    */
   double error(const HybridValues& c) const override;
 
-  /// Multiply in a DecisionTreeFactor and return the result as DecisionTreeFactor
+  /// Compute error for each assignment and return as a tree
+  virtual AlgebraicDecisionTree<Key> errorTree() const;
+
+  /// Multiply in a DecisionTreeFactor and return the result as
+  /// DecisionTreeFactor
   virtual DecisionTreeFactor operator*(const DecisionTreeFactor&) const = 0;
 
+  /**
+   * @brief Multiply in a DiscreteFactor and return the result as
+   * DiscreteFactor, both via shared pointers.
+   *
+   * @param df DiscreteFactor shared_ptr
+   * @return DiscreteFactor::shared_ptr
+   */
+  virtual DiscreteFactor::shared_ptr multiply(
+      const DiscreteFactor::shared_ptr& df) const = 0;
+
+  /// divide by DiscreteFactor::shared_ptr f (safely)
+  virtual DiscreteFactor::shared_ptr operator/(
+      const DiscreteFactor::shared_ptr& df) const = 0;
+
   virtual DecisionTreeFactor toDecisionTreeFactor() const = 0;
+
+  /// Create new factor by summing all values with the same separator values
+  virtual DiscreteFactor::shared_ptr sum(size_t nrFrontals) const = 0;
+
+  /// Create new factor by summing all values with the same separator values
+  virtual DiscreteFactor::shared_ptr sum(const Ordering& keys) const = 0;
+
+  /// Create new factor by maximizing over all values with the same separator.
+  virtual DiscreteFactor::shared_ptr max(size_t nrFrontals) const = 0;
+
+  /// Create new factor by maximizing over all values with the same separator.
+  virtual DiscreteFactor::shared_ptr max(const Ordering& keys) const = 0;
+
+  /**
+   * Get the number of non-zero values contained in this factor.
+   * It could be much smaller than `prod_{key}(cardinality(key))`.
+   */
+  virtual uint64_t nrValues() const = 0;
 
   /// @}
   /// @name Wrapper support
   /// @{
-  
+
   /// Translation table from values to strings.
   using Names = DiscreteValues::Names;
 
@@ -124,12 +194,23 @@ public:
       const Names& names = {}) const = 0;
 
   /// @}
+
+ private:
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
+  /** Serialization function */
+  friend class boost::serialization::access;
+  template <class ARCHIVE>
+  void serialize(ARCHIVE& ar, const unsigned int /*version*/) {
+    ar& BOOST_SERIALIZATION_BASE_OBJECT_NVP(Base);
+    ar& BOOST_SERIALIZATION_NVP(cardinalities_);
+  }
+#endif
 };
 // DiscreteFactor
 
 // traits
-template<> struct traits<DiscreteFactor> : public Testable<DiscreteFactor> {};
-
+template <>
+struct traits<DiscreteFactor> : public Testable<DiscreteFactor> {};
 
 /**
  * @brief Normalize a set of log probabilities.
@@ -147,7 +228,6 @@ template<> struct traits<DiscreteFactor> : public Testable<DiscreteFactor> {};
  * of the (unnormalized) log probabilities are either very large or very
  * small.
  */
-std::vector<double> expNormalize(const std::vector<double> &logProbs);
+std::vector<double> expNormalize(const std::vector<double>& logProbs);
 
-
-}// namespace gtsam
+}  // namespace gtsam

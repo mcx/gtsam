@@ -21,7 +21,7 @@
 #include <gtsam/base/Manifold.h>
 #include <gtsam/base/Testable.h>
 #include <gtsam/base/OptionalJacobian.h>
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
 #include <boost/serialization/nvp.hpp>
 #endif
 #include <iostream>
@@ -55,9 +55,9 @@ private:
   R range_;
 
 public:
-  enum { dimB = traits<B>::dimension };
-  enum { dimR = traits<R>::dimension };
-  enum { dimension = dimB + dimR };
+  constexpr static const size_t dimB = traits<B>::dimension;
+  constexpr static const size_t dimR = traits<R>::dimension;
+  constexpr static const size_t dimension = dimB + dimR;
 
   /// @name Standard Constructors
   /// @{
@@ -148,7 +148,7 @@ public:
   /// @{
 
 private:
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
   /// Serialization function
   template <class ARCHIVE>
   void serialize(ARCHIVE& ar, const unsigned int /*version*/) {
@@ -162,9 +162,7 @@ private:
   /// @}
 
   // Alignment, see https://eigen.tuxfamily.org/dox/group__TopicStructHavingEigenMembers.html
-  enum {
-    NeedsToAlign = (sizeof(B) % 16) == 0 || (sizeof(R) % 16) == 0
-  };
+  inline constexpr static auto NeedsToAlign = (sizeof(B) % 16) == 0 || (sizeof(R) % 16) == 0;
 public:
   GTSAM_MAKE_ALIGNED_OPERATOR_NEW_IF(NeedsToAlign)
 };

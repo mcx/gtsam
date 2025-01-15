@@ -47,7 +47,7 @@ class GTSAM_EXPORT Line3 {
   double a_, b_;  // Intersection of line with the world x-y plane rotated by R_
   // Also the closest point on line to origin
  public:
-  enum { dimension = 4 };
+  inline constexpr static auto dimension = 4;
 
   /** Default constructor is the Z axis **/
   Line3() :
@@ -146,7 +146,7 @@ class GTSAM_EXPORT Line3 {
    * @param Dline -  OptionalJacobian of transformed line with respect to l
    * @return Transformed line in camera frame
    */
-  friend Line3 transformTo(const Pose3 &wTc, const Line3 &wL,
+  GTSAM_EXPORT friend Line3 transformTo(const Pose3 &wTc, const Line3 &wL,
                            OptionalJacobian<4, 6> Dpose,
                            OptionalJacobian<4, 4> Dline);
 };

@@ -11,7 +11,7 @@
 
 /**
  *@file  Pose3.h
- *@brief 3D Pose
+ * @brief 3D Pose manifold SO(3) x R^3 and group SE(3)
  */
 
 // \callgraph
@@ -55,9 +55,9 @@ public:
   Pose3() : R_(traits<Rot3>::Identity()), t_(traits<Point3>::Identity()) {}
 
   /** Copy constructor */
-  Pose3(const Pose3& pose) :
-      R_(pose.R_), t_(pose.t_) {
-  }
+  Pose3(const Pose3& pose) = default;
+
+  Pose3& operator=(const Pose3& other) = default;
 
   /** Construct from R,t */
   Pose3(const Rot3& R, const Point3& t) :
@@ -77,6 +77,9 @@ public:
   static Pose3 Create(const Rot3& R, const Point3& t,
                       OptionalJacobian<6, 3> HR = {},
                       OptionalJacobian<6, 3> Ht = {});
+
+  /** Construct from Pose2 in the xy plane, with derivative. */
+  static Pose3 FromPose2(const Pose2& p, OptionalJacobian<6,3> H = {});
 
   /**
    *  Create Pose3 by aligning two point pairs
@@ -204,7 +207,7 @@ public:
   static Matrix6 LogmapDerivative(const Pose3& xi);
 
   // Chart at origin, depends on compile-time flag GTSAM_POSE3_EXPMAP
-  struct ChartAtOrigin {
+  struct GTSAM_EXPORT ChartAtOrigin {
     static Pose3 Retract(const Vector6& xi, ChartJacobian Hxi = {});
     static Vector6 Local(const Pose3& pose, ChartJacobian Hpose = {});
   };
@@ -217,9 +220,26 @@ public:
   *  (see Chirikjian11book2, pg 44, eq 10.95.
   *  The closed-form formula is identical to formula 102 in Barfoot14tro where
   *  Q_l of the SE3 Expmap left derivative matrix is given.
+  *  This is the Jacobian of ExpmapTranslation and computed there.
   */
   static Matrix3 ComputeQforExpmapDerivative(
       const Vector6& xi, double nearZeroThreshold = 1e-5);
+
+  /**
+   * Compute the translation part of the exponential map, with Jacobians.
+   * @param w 3D angular velocity
+   * @param v 3D velocity
+   * @param Q Optionally, compute 3x3 Jacobian wrpt w
+   * @param J Optionally, compute 3x3 Jacobian wrpt v = right Jacobian of SO(3)
+   * @param nearZeroThreshold threshold for small values
+   * @note This function returns Jacobians Q and J corresponding to the bottom
+   * blocks of the SE(3) exponential, and translated from left to right from the
+   * applyLeftJacobian Jacobians.
+   */
+  static Vector3 ExpmapTranslation(const Vector3& w, const Vector3& v,
+                                   OptionalJacobian<3, 3> Q = {},
+                                   OptionalJacobian<3, 3> J = {},
+                                   double nearZeroThreshold = 1e-5);
 
   using LieGroup<Pose3, 6>::inverse; // version with derivative
 
@@ -389,7 +409,7 @@ public:
   friend std::ostream &operator<<(std::ostream &os, const Pose3& p);
 
  private:
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
   /** Serialization function */
   friend class boost::serialization::access;
   template<class Archive>
