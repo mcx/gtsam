@@ -31,8 +31,10 @@ namespace gtsam {
 
   /**
   * A GaussianConditional functions as the node in a Bayes network.
-  * It has a set of parents y,z, etc. and implements a probability density on x.
+  * It has a set of parents y,z, etc. and implements a Gaussian probability density p(x | y, z) on x.
   * The negative log-density is given by \f$ \frac{1}{2} |Rx - (d - Sy - Tz - ...)|^2 \f$
+  * The mean of the conditional density is \f$ R^{-1}(d - Sy - Tz - ...) \f$.
+  * The covariance of the conditional density is given by the noise model and is constrained to be diagonal.
   * @ingroup linear
   */
   class GTSAM_EXPORT GaussianConditional :
@@ -131,10 +133,14 @@ namespace gtsam {
     /// @{
 
     /**
-     * normalization constant = 1.0 / sqrt((2*pi)^n*det(Sigma))
-     * log = - 0.5 * n*log(2*pi) - 0.5 * log det(Sigma)
+     * @brief Return the negative log of the normalization constant.
+     *
+     * normalization constant k = 1.0 / sqrt((2*pi)^n*det(Sigma))
+     * -log(k) = 0.5 * n*log(2*pi) + 0.5 * log det(Sigma)
+     *
+     * @return double 
      */
-    double logNormalizationConstant() const override;
+    double negLogConstant() const override;
 
     /**
      * Calculate log-probability log(evaluate(x)) for given values `x`:
@@ -272,7 +278,7 @@ namespace gtsam {
     /// @}
 
    private:
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
     /** Serialization function */
     friend class boost::serialization::access;
     template<class Archive>

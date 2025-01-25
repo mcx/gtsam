@@ -69,6 +69,12 @@ class GTSAM_EXPORT DiscreteValues : public Assignment<Key> {
     return Base::insert(value);
   }
 
+  /**
+   * Insert key-assignment pair.
+   * Throws an invalid_argument exception if
+   * any keys to be inserted are already used. */
+  DiscreteValues& insert(const std::pair<Key, size_t>& assignment);
+
   /** Insert all values from \c values.  Throws an invalid_argument exception if
    * any keys to be inserted are already used. */
   DiscreteValues& insert(const DiscreteValues& values);
@@ -120,13 +126,18 @@ class GTSAM_EXPORT DiscreteValues : public Assignment<Key> {
   /// @}
 };
 
+/// Free version of CartesianProduct.
+inline std::vector<DiscreteValues> cartesianProduct(const DiscreteKeys& keys) {
+  return DiscreteValues::CartesianProduct(keys);
+}
+
 /// Free version of markdown.
-std::string markdown(const DiscreteValues& values,
+std::string GTSAM_EXPORT markdown(const DiscreteValues& values,
                      const KeyFormatter& keyFormatter = DefaultKeyFormatter,
                      const DiscreteValues::Names& names = {});
 
 /// Free version of html.
-std::string html(const DiscreteValues& values,
+std::string GTSAM_EXPORT html(const DiscreteValues& values,
                  const KeyFormatter& keyFormatter = DefaultKeyFormatter,
                  const DiscreteValues::Names& names = {});
 

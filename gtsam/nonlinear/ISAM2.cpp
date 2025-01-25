@@ -29,6 +29,7 @@
 #include <map>
 #include <utility>
 #include <variant>
+#include <cassert>
 
 using namespace std;
 
@@ -424,6 +425,11 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   ISAM2Result result(params_.enableDetailedResults);
   UpdateImpl update(params_, updateParams);
 
+  // Initialize any new variables \Theta_{new} and add
+  // \Theta:=\Theta\cup\Theta_{new}.
+  // Needed before delta update if using Dogleg optimizer.
+  addVariables(newTheta, result.details());
+
   // Update delta if we need it to check relinearization later
   if (update.relinarizationNeeded(update_count_))
     updateDelta(updateParams.forceFullSolve);
@@ -435,9 +441,7 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   update.computeUnusedKeys(newFactors, variableIndex_,
                            result.keysWithRemovedFactors, &result.unusedKeys);
 
-  // 2. Initialize any new variables \Theta_{new} and add
-  // \Theta:=\Theta\cup\Theta_{new}.
-  addVariables(newTheta, result.details());
+  // 2. Compute new error to check for relinearization
   if (params_.evaluateNonlinearError)
     update.error(nonlinearFactors_, calculateEstimate(), &result.errorBefore);
 
@@ -556,9 +560,12 @@ void ISAM2::marginalizeLeaves(
         // We do not need the marginal factors associated with this clique
         // because their information is already incorporated in the new
         // marginal factor.  So, now associate this marginal factor with the
-        // parent of this clique.
-        marginalFactors[clique->parent()->conditional()->front()].push_back(
-            marginalFactor);
+        // parent of this clique. If the clique is a root and has no parent, then
+        // we can discard it without keeping track of the marginal factor.
+        if (clique->parent()) {
+            marginalFactors[clique->parent()->conditional()->front()].push_back(
+                    marginalFactor);
+        }
         // Now remove this clique and its subtree - all of its marginal
         // information has been stored in marginalFactors.
         trackingRemoveSubtree(clique);
@@ -636,7 +643,7 @@ void ISAM2::marginalizeLeaves(
 
         // Make the clique's matrix appear as a subset
         const DenseIndex dimToRemove = cg->matrixObject().offset(nToRemove);
-        cg->matrixObject().firstBlock() = nToRemove;
+        cg->matrixObject().firstBlock() += nToRemove;
         cg->matrixObject().rowStart() = dimToRemove;
 
         // Change the keys in the clique
@@ -662,42 +669,55 @@ void ISAM2::marginalizeLeaves(
   // At this point we have updated the BayesTree, now update the remaining iSAM2
   // data structures
 
+  // Remove the factors to remove that will be summarized in marginal factors
+  NonlinearFactorGraph removedFactors;
+  for (const auto index : factorIndicesToRemove) {
+    removedFactors.push_back(nonlinearFactors_[index]);
+    nonlinearFactors_.remove(index);
+    if (params_.cacheLinearizedFactors) {
+      linearFactors_.remove(index);
+    }
+  }
+  variableIndex_.remove(factorIndicesToRemove.begin(),
+                        factorIndicesToRemove.end(), removedFactors);
+
   // Gather factors to add - the new marginal factors
-  GaussianFactorGraph factorsToAdd;
+  GaussianFactorGraph factorsToAdd{};
+  NonlinearFactorGraph nonlinearFactorsToAdd{};
   for (const auto& key_factors : marginalFactors) {
     for (const auto& factor : key_factors.second) {
       if (factor) {
         factorsToAdd.push_back(factor);
-        if (marginalFactorsIndices)
-          marginalFactorsIndices->push_back(nonlinearFactors_.size());
-        nonlinearFactors_.push_back(
-            std::make_shared<LinearContainerFactor>(factor));
-        if (params_.cacheLinearizedFactors) linearFactors_.push_back(factor);
+        nonlinearFactorsToAdd.emplace_shared<LinearContainerFactor>(factor);
         for (Key factorKey : *factor) {
           fixedVariables_.insert(factorKey);
         }
       }
     }
   }
-  variableIndex_.augment(factorsToAdd);  // Augment the variable index
-
-  // Remove the factors to remove that have been summarized in the newly-added
-  // marginal factors
-  NonlinearFactorGraph removedFactors;
-  for (const auto index : factorIndicesToRemove) {
-    removedFactors.push_back(nonlinearFactors_[index]);
-    nonlinearFactors_.remove(index);
-    if (params_.cacheLinearizedFactors) linearFactors_.remove(index);
+  // Add the nonlinear factors and keep track of the new factor indices
+  auto newFactorIndices = nonlinearFactors_.add_factors(nonlinearFactorsToAdd,
+                                                        params_.findUnusedFactorSlots);
+  // Add cached linear factors.
+  if (params_.cacheLinearizedFactors){
+    linearFactors_.resize(nonlinearFactors_.size());
+    for (std::size_t i = 0; i < nonlinearFactorsToAdd.size(); ++i){
+      linearFactors_[newFactorIndices[i]] = factorsToAdd[i];
+    }
   }
-  variableIndex_.remove(factorIndicesToRemove.begin(),
-                        factorIndicesToRemove.end(), removedFactors);
-
-  if (deletedFactorsIndices)
-    deletedFactorsIndices->assign(factorIndicesToRemove.begin(),
-                                  factorIndicesToRemove.end());
+  // Augment the variable index
+  variableIndex_.augment(factorsToAdd, newFactorIndices);
 
   // Remove the marginalized variables
   removeVariables(KeySet(leafKeys.begin(), leafKeys.end()));
+
+  if (deletedFactorsIndices) {
+    deletedFactorsIndices->assign(factorIndicesToRemove.begin(),
+                                  factorIndicesToRemove.end());
+  }
+  if (marginalFactorsIndices){
+    *marginalFactorsIndices = std::move(newFactorIndices);
+  }
 }
 
 /* ************************************************************************* */
@@ -715,6 +735,7 @@ void ISAM2::updateDelta(bool forceFullSolve) const {
                                       effectiveWildfireThreshold, &delta_);
     deltaReplacedMask_.clear();
     gttoc(Wildfire_update);
+
   } else if (std::holds_alternative<ISAM2DoglegParams>(params_.optimizationParams)) {
     // If using Dogleg, do a Dogleg step
     const ISAM2DoglegParams& doglegParams =
@@ -753,9 +774,8 @@ void ISAM2::updateDelta(bool forceFullSolve) const {
     gttic(Copy_dx_d);
     // Update Delta and linear step
     doglegDelta_ = doglegResult.delta;
-    delta_ =
-        doglegResult
-            .dx_d;  // Copy the VectorValues containing with the linear solution
+    // Copy the VectorValues containing with the linear solution
+    delta_ = doglegResult.dx_d;
     gttoc(Copy_dx_d);
   } else {
     throw std::runtime_error("iSAM2: unknown ISAM2Params type");

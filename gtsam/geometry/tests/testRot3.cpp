@@ -598,6 +598,25 @@ TEST(Rot3, quaternion) {
 }
 
 /* ************************************************************************* */
+TEST(Rot3, ConvertQuaternion) {
+  Eigen::Quaterniond eigenQuaternion;
+  eigenQuaternion.w() = 1.0;
+  eigenQuaternion.x() = 2.0;
+  eigenQuaternion.y() = 3.0;
+  eigenQuaternion.z() = 4.0;
+  EXPECT_DOUBLES_EQUAL(1, eigenQuaternion.w(), 1e-9);
+  EXPECT_DOUBLES_EQUAL(2, eigenQuaternion.x(), 1e-9);
+  EXPECT_DOUBLES_EQUAL(3, eigenQuaternion.y(), 1e-9);
+  EXPECT_DOUBLES_EQUAL(4, eigenQuaternion.z(), 1e-9);
+
+  Rot3 R(eigenQuaternion);
+  EXPECT_DOUBLES_EQUAL(1, R.toQuaternion().w(), 1e-9);
+  EXPECT_DOUBLES_EQUAL(2, R.toQuaternion().x(), 1e-9);
+  EXPECT_DOUBLES_EQUAL(3, R.toQuaternion().y(), 1e-9);
+  EXPECT_DOUBLES_EQUAL(4, R.toQuaternion().z(), 1e-9);
+}
+
+/* ************************************************************************* */
 Matrix Cayley(const Matrix& A) {
   Matrix::Index n = A.cols();
   const Matrix I = Matrix::Identity(n,n);
@@ -935,6 +954,46 @@ TEST(Rot3, determinant) {
 
     EXPECT_DOUBLES_EQUAL(expected, actual, 1e-7);
   }
+}
+
+/* ************************************************************************* */
+TEST(Rot3, ExpmapChainRule) {
+  // Multiply with an arbitrary matrix and exponentiate
+  Matrix3 M;
+  M << 1, 2, 3, 4, 5, 6, 7, 8, 9;
+  auto g = [&](const Vector3& omega) {
+    return Rot3::Expmap(M*omega);
+  };
+
+  // Test the derivatives at zero
+  const Matrix3 expected = numericalDerivative11<Rot3, Vector3>(g, Z_3x1);
+  EXPECT(assert_equal<Matrix3>(expected, M, 1e-5)); // SO3::ExpmapDerivative(Z_3x1) is identity
+
+  // Test the derivatives at another value
+  const Vector3 delta{0.1,0.2,0.3};
+  const Matrix3 expected2 = numericalDerivative11<Rot3, Vector3>(g, delta);
+  EXPECT(assert_equal<Matrix3>(expected2, SO3::ExpmapDerivative(M*delta) * M, 1e-5));
+}
+
+/* ************************************************************************* */
+TEST(Rot3, expmapChainRule) {
+  // Multiply an arbitrary rotation with exp(M*x)
+  // Perhaps counter-intuitively, this has the same derivatives as above
+  Matrix3 M;
+  M << 1, 2, 3, 4, 5, 6, 7, 8, 9;
+  const Rot3 R = Rot3::Expmap({1, 2, 3});
+  auto g = [&](const Vector3& omega) {
+    return R.expmap(M*omega);
+  };
+
+  // Test the derivatives at zero
+  const Matrix3 expected = numericalDerivative11<Rot3, Vector3>(g, Z_3x1);
+  EXPECT(assert_equal<Matrix3>(expected, M, 1e-5));
+
+  // Test the derivatives at another value
+  const Vector3 delta{0.1,0.2,0.3};
+  const Matrix3 expected2 = numericalDerivative11<Rot3, Vector3>(g, delta);
+  EXPECT(assert_equal<Matrix3>(expected2, SO3::ExpmapDerivative(M*delta) * M, 1e-5));
 }
 
 /* ************************************************************************* */

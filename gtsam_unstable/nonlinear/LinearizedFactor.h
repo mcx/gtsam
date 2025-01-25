@@ -45,7 +45,7 @@ protected:
 public:
 
   /** default constructor for serialization */
-  LinearizedGaussianFactor() {};
+  LinearizedGaussianFactor() = default;
 
   /**
    * @param gaussian:   A jacobian or hessian factor
@@ -53,13 +53,13 @@ public:
    */
   LinearizedGaussianFactor(const GaussianFactor::shared_ptr& gaussian, const Values& lin_points);
 
-  ~LinearizedGaussianFactor() override {};
+  ~LinearizedGaussianFactor() override = default;
 
   // access functions
   const Values& linearizationPoint() const { return lin_points_; }
 
 private:
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
   /** Serialization function */
   friend class boost::serialization::access;
   template<class ARCHIVE>
@@ -128,11 +128,11 @@ public:
 
   // access functions
   const constBVector b() const { return Ab_(size()).col(0); }
-  const constABlock A() const { return Ab_.range(0, size()); };
+  const constABlock A() const { return Ab_.range(0, size()); }
   const constABlock A(Key key) const { return Ab_(std::find(begin(), end(), key) - begin()); }
 
   /** get the dimension of the factor (number of rows on linearization) */
-  size_t dim() const override { return Ab_.rows(); };
+  size_t dim() const override { return Ab_.rows(); }
 
   /** Calculate the error of the factor */
   double error(const Values& c) const override;
@@ -148,7 +148,7 @@ public:
   Vector error_vector(const Values& c) const;
 
 private:
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
   friend class boost::serialization::access;
   /** Serialization function */
   template<class ARCHIVE>
@@ -279,7 +279,7 @@ public:
 
 private:
   /** Serialization function */
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
   friend class boost::serialization::access;
   template<class ARCHIVE>
   void serialize(ARCHIVE & ar, const unsigned int /*version*/) {

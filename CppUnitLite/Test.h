@@ -80,7 +80,7 @@ protected:
 #define TEST_UNSAFE(testGroup, testName)\
   class testGroup##testName##Test : public Test \
   { public: testGroup##testName##Test () : Test (#testName "Test", __FILE__, __LINE__, false) {} \
-            virtual ~testGroup##testName##Test () {};\
+            virtual ~testGroup##testName##Test () {} \
             void run (TestResult& result_) override;} \
     testGroup##testName##Instance; \
   void testGroup##testName##Test::run (TestResult& result_)
@@ -129,7 +129,7 @@ protected:
     result_.addFailure(Failure(name_, __FILE__, __LINE__, #expected, #actual)); }
 
 #define CHECK_EQUAL(expected,actual)\
-{ if ((expected) == (actual)) return; result_.addFailure(Failure(name_, __FILE__, __LINE__, std::to_string(expected), std::to_string(actual))); }
+{ if (!((expected) == (actual))) { result_.addFailure(Failure(name_, __FILE__, __LINE__, std::to_string(expected), std::to_string(actual))); return; } }
 
 #define LONGS_EQUAL(expected,actual)\
 { long actualTemp = actual; \

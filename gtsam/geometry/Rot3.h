@@ -159,7 +159,11 @@ class GTSAM_EXPORT Rot3 : public LieGroup<Rot3, 3> {
     /// Rotations around Z, Y, then X axes as in http://en.wikipedia.org/wiki/Rotation_matrix, counterclockwise when looking from unchanging axis.
     inline static Rot3 RzRyRx(const Vector& xyz,
                               OptionalJacobian<3, 3> H = {}) {
-      assert(xyz.size() == 3);
+#ifndef NDEBUG
+      if (xyz.size() != 3) {
+        throw;
+      }
+#endif
       Rot3 out;
       if (H) {
         Vector3 Hx, Hy, Hz;
@@ -396,7 +400,7 @@ class GTSAM_EXPORT Rot3 : public LieGroup<Rot3, 3> {
     Matrix3 AdjointMap() const { return matrix(); }
 
     // Chart at origin, depends on compile-time flag ROT3_DEFAULT_COORDINATES_MODE
-    struct ChartAtOrigin {
+    struct GTSAM_EXPORT ChartAtOrigin {
       static Rot3 Retract(const Vector3& v, ChartJacobian H = {});
       static Vector3 Local(const Rot3& r, ChartJacobian H = {});
     };
@@ -528,7 +532,7 @@ class GTSAM_EXPORT Rot3 : public LieGroup<Rot3, 3> {
     /// @}
 
    private:
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
     /** Serialization function */
     friend class boost::serialization::access;
     template <class ARCHIVE>
@@ -560,8 +564,8 @@ class GTSAM_EXPORT Rot3 : public LieGroup<Rot3, 3> {
 #endif
   };
 
-  /// std::vector of Rot3s, mainly for wrapper
-  using Rot3Vector = std::vector<Rot3, Eigen::aligned_allocator<Rot3> >;
+  /// std::vector of Rot3s, used in Matlab wrapper
+  using Rot3Vector = std::vector<Rot3, Eigen::aligned_allocator<Rot3>>;
 
   /**
    * [RQ] receives a 3 by 3 matrix and returns an upper triangular matrix R

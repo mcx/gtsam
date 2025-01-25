@@ -82,6 +82,12 @@ namespace gtsam {
     /** Check equality */
     bool equals(const This& bn, double tol = 1e-9) const;
 
+    /// Check exact equality.
+    friend bool operator==(const GaussianBayesNet& lhs,
+                           const GaussianBayesNet& rhs) {
+      return lhs.isEqual(rhs);
+    }
+
     /// print graph
     void print(
         const std::string& s = "",
@@ -229,6 +235,14 @@ namespace gtsam {
     double logDeterminant() const;
 
     /**
+     * @brief Get the negative log of the normalization constant corresponding
+     * to the joint Gaussian density represented by this Bayes net.
+     *
+     * @return double
+     */
+    double negLogConstant() const;
+
+    /**
      * Backsubstitute with a different RHS vector than the one stored in this BayesNet.
      * gy=inv(R*inv(Sigma))*gx
      */
@@ -253,7 +267,7 @@ namespace gtsam {
     /// @}
 
   private:
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
     /** Serialization function */
     friend class boost::serialization::access;
     template<class ARCHIVE>

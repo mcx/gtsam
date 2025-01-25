@@ -27,7 +27,8 @@ namespace gtsam {
 Ordering HybridSmoother::getOrdering(
     const HybridGaussianFactorGraph &newFactors) {
   HybridGaussianFactorGraph factors(hybridBayesNet());
-  factors += newFactors;
+  factors.push_back(newFactors);
+
   // Get all the discrete keys from the factors
   KeySet allDiscrete = factors.discreteKeySet();
 
@@ -45,7 +46,7 @@ Ordering HybridSmoother::getOrdering(
   std::copy(allDiscrete.begin(), allDiscrete.end(),
             std::back_inserter(newKeysDiscreteLast));
 
-  const VariableIndex index(newFactors);
+  const VariableIndex index(factors);
 
   // Get an ordering where the new keys are eliminated last
   Ordering ordering = Ordering::ColamdConstrainedLast(
@@ -56,28 +57,32 @@ Ordering HybridSmoother::getOrdering(
 
 /* ************************************************************************* */
 void HybridSmoother::update(HybridGaussianFactorGraph graph,
-                            const Ordering &ordering,
-                            std::optional<size_t> maxNrLeaves) {
+                            std::optional<size_t> maxNrLeaves,
+                            const std::optional<Ordering> given_ordering) {
+  Ordering ordering;
+  // If no ordering provided, then we compute one
+  if (!given_ordering.has_value()) {
+    ordering = this->getOrdering(graph);
+  } else {
+    ordering = *given_ordering;
+  }
+
   // Add the necessary conditionals from the previous timestep(s).
   std::tie(graph, hybridBayesNet_) =
       addConditionals(graph, hybridBayesNet_, ordering);
 
   // Eliminate.
-  auto bayesNetFragment = graph.eliminateSequential(ordering);
+  HybridBayesNet bayesNetFragment = *graph.eliminateSequential(ordering);
 
   /// Prune
   if (maxNrLeaves) {
     // `pruneBayesNet` sets the leaves with 0 in discreteFactor to nullptr in
     // all the conditionals with the same keys in bayesNetFragment.
-    HybridBayesNet prunedBayesNetFragment =
-        bayesNetFragment->prune(*maxNrLeaves);
-    // Set the bayes net fragment to the pruned version
-    bayesNetFragment =
-        std::make_shared<HybridBayesNet>(prunedBayesNetFragment);
+    bayesNetFragment = bayesNetFragment.prune(*maxNrLeaves);
   }
 
   // Add the partial bayes net to the posterior bayes net.
-  hybridBayesNet_.add(*bayesNetFragment);
+  hybridBayesNet_.add(bayesNetFragment);
 }
 
 /* ************************************************************************* */
@@ -88,9 +93,10 @@ HybridSmoother::addConditionals(const HybridGaussianFactorGraph &originalGraph,
   HybridGaussianFactorGraph graph(originalGraph);
   HybridBayesNet hybridBayesNet(originalHybridBayesNet);
 
-  // If we are not at the first iteration, means we have conditionals to add.
+  // If hybridBayesNet is not empty,
+  // it means we have conditionals to add to the factor graph.
   if (!hybridBayesNet.empty()) {
-    // We add all relevant conditional mixtures on the last continuous variable
+    // We add all relevant hybrid conditionals on the last continuous variable
     // in the previous `hybridBayesNet` to the graph
 
     // Conditionals to remove from the bayes net
@@ -128,9 +134,9 @@ HybridSmoother::addConditionals(const HybridGaussianFactorGraph &originalGraph,
 }
 
 /* ************************************************************************* */
-GaussianMixture::shared_ptr HybridSmoother::gaussianMixture(
+HybridGaussianConditional::shared_ptr HybridSmoother::gaussianMixture(
     size_t index) const {
-  return hybridBayesNet_.at(index)->asMixture();
+  return hybridBayesNet_.at(index)->asHybrid();
 }
 
 /* ************************************************************************* */
