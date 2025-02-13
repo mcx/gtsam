@@ -49,7 +49,7 @@ class ClusterTree {
     virtual ~Cluster() {}
 
     const Cluster& operator[](size_t i) const {
-      return *(children[i]);
+      return *(children.at(i));
     }
 
     /// Construct from factors associated with a single key
@@ -161,14 +161,14 @@ class ClusterTree {
   }
 
   const Cluster& operator[](size_t i) const {
-    return *(roots_[i]);
+    return *(roots_.at(i));
   }
 
   /// @}
 
+ protected:
   ~ClusterTree();
 
- protected:
   /// @name Details
   /// @{
 

@@ -23,7 +23,6 @@
 #include <gtsam/base/SymmetricBlockMatrix.h>
 #include <gtsam/base/FastVector.h>
 
-
 namespace gtsam {
 
   // Forward declarations
@@ -131,7 +130,7 @@ namespace gtsam {
      * term, and f the constant term.
      * JacobianFactor error is \f[ 0.5* (Ax-b)' M (Ax-b) = 0.5*x'A'MAx - x'A'Mb + 0.5*b'Mb \f]
      * HessianFactor  error is \f[ 0.5*(x'Gx - 2x'g + f) = 0.5*x'Gx    - x'*g   + 0.5*f    \f]
-     * So, with \f$ A = [A1 A2] \f$ and \f$ G=A*'M*A = [A1';A2']*M*[A1 A2] \f$ we have
+     * So, with \f$ A = [A1 A2] \f$ and \f$ G=A'*M*A = [A1';A2']*M*[A1 A2] \f$ we have
      \code
       n1*n1 G11 = A1'*M*A1
       n1*n2 G12 = A1'*M*A2
@@ -241,14 +240,18 @@ namespace gtsam {
      * use, for example, begin() + 2 to get the 3rd variable in this factor.
      * @return The linear term \f$ g \f$ */
     SymmetricBlockMatrix::constBlock linearTerm(const_iterator j) const {
-      assert(!empty());
+#ifndef NDEBUG
+      if(empty()) throw;
+#endif
       return info_.aboveDiagonalBlock(j - begin(), size());
     }
 
     /** Return the complete linear term \f$ g \f$ as described above.
      * @return The linear term \f$ g \f$ */
     SymmetricBlockMatrix::constBlock linearTerm() const {
-      assert(!empty());
+#ifndef NDEBUG
+      if(empty()) throw;
+#endif
       // get the last column (except the bottom right block)
       return info_.aboveDiagonalRange(0, size(), size(), size() + 1);
     }
@@ -256,7 +259,9 @@ namespace gtsam {
     /** Return the complete linear term \f$ g \f$ as described above.
      * @return The linear term \f$ g \f$ */
     SymmetricBlockMatrix::Block linearTerm() {
-      assert(!empty());
+#ifndef NDEBUG
+      if(empty()) throw;
+#endif
       return info_.aboveDiagonalRange(0, size(), size(), size() + 1);
     }
 
@@ -325,7 +330,9 @@ namespace gtsam {
      * @param other the HessianFactor to be updated
      */
     void updateHessian(HessianFactor* other) const {
-      assert(other);
+#ifndef NDEBUG
+      if(!other) throw;
+#endif
       updateHessian(other->keys_, &other->info_);
     }
 
@@ -363,7 +370,7 @@ namespace gtsam {
     friend class NonlinearFactorGraph;
     friend class NonlinearClusterTree;
 
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
     /** Serialization function */
     friend class boost::serialization::access;
     template<class ARCHIVE>

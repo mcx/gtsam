@@ -27,7 +27,7 @@
 namespace gtsam {
 
 /**
- * IMU pre-integration on NavSatet manifold.
+ * IMU pre-integration on NavState manifold.
  * This corresponds to the original RSS paper (with one difference: V is rotated)
  */
 class GTSAM_EXPORT ManifoldPreintegration : public PreintegrationBase {
@@ -113,7 +113,7 @@ public:
   /// @}
 
 private:
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
   /** Serialization function */
   friend class boost::serialization::access;
   template<class ARCHIVE>
