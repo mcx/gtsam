@@ -8,10 +8,10 @@
 * Functionality to serialize std::optional<T> to boost::archive
 * Inspired from this PR: https://github.com/boostorg/serialization/pull/163
 * ---------------------------------------------------------------------------- */
+#pragma once
 
 // Defined only if boost serialization is enabled
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
-#pragma once
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
 #include <optional>
 #include <boost/config.hpp>
 
@@ -48,14 +48,26 @@
  */
 #ifdef __GNUC__
 #if __GNUC__ >= 7 && __cplusplus >= 201703L
-namespace boost { namespace serialization { struct U; } }
+// Based on https://github.com/borglab/gtsam/issues/1738, we define U as a complete type.
+namespace boost { namespace serialization { struct U{}; } }
 namespace std { template<> struct is_trivially_default_constructible<boost::serialization::U> : std::false_type {}; }
 namespace std { template<> struct is_trivially_copy_constructible<boost::serialization::U> : std::false_type {}; }
 namespace std { template<> struct is_trivially_move_constructible<boost::serialization::U> : std::false_type {}; }
+// QCC (The QNX GCC-based Compiler) also has this issue, but it also extends to trivial destructor.
+#if defined(__QNX__)
+namespace std { template<> struct is_trivially_destructible<boost::serialization::U> : std::false_type {}; }
+#endif
 #endif
 #endif
 
-
+/*
+ * PR https://github.com/boostorg/serialization/pull/163 was merged
+ * on September 3rd 2023,
+ * and so the below code is now a part of Boost 1.84.
+ * We include it for posterity, hence the check for BOOST_VERSION being less
+ * than 1.84.
+ */
+#if BOOST_VERSION < 108400
 // function specializations must be defined in the appropriate
 // namespace - boost::serialization
 namespace boost {
@@ -76,8 +88,7 @@ void save(Archive& ar, const std::optional<T>& t, const unsigned int /*version*/
 }
 
 template <class Archive, class T>
-void load(Archive& ar, std::optional<T>& t, const unsigned int /*version*/
-) {
+void load(Archive& ar, std::optional<T>& t, const unsigned int /*version*/) {
   bool tflag;
   ar >> boost::serialization::make_nvp("initialized", tflag);
   if (!tflag) {
@@ -99,4 +110,5 @@ void serialize(Archive& ar, std::optional<T>& t, const unsigned int version) {
 
 }  // namespace serialization
 }  // namespace boost
-#endif
+#endif // BOOST_VERSION < 108400
+#endif // GTSAM_ENABLE_BOOST_SERIALIZATION

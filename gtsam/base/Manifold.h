@@ -55,7 +55,7 @@ namespace internal {
 template<class Class>
 struct HasManifoldPrereqs {
 
-  enum { dim = Class::dimension };
+  inline constexpr static auto dim = Class::dimension;
 
   Class p, q;
   Eigen::Matrix<double, dim, 1> v;
@@ -95,7 +95,7 @@ struct ManifoldTraits: GetDimensionImpl<Class, Class::dimension> {
   GTSAM_CONCEPT_ASSERT(HasManifoldPrereqs<Class>);
 
   // Dimension of the manifold
-  enum { dimension = Class::dimension };
+  inline constexpr static auto dimension = Class::dimension;
 
   // Typedefs required by all manifold types.
   typedef Class ManifoldType;
@@ -162,7 +162,7 @@ struct FixedDimension {
   typedef const int value_type;
   static const int value = traits<T>::dimension;
   static_assert(value != Eigen::Dynamic,
-      "FixedDimension instantiated for dymanically-sized type.");
+      "FixedDimension instantiated for dynamically-sized type.");
 };
 } // \ namespace gtsam
 
