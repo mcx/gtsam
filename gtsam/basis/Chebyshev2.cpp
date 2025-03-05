@@ -17,8 +17,17 @@
  */
 
 #include <gtsam/basis/Chebyshev2.h>
+#include <cassert>
 
 namespace gtsam {
+
+double Chebyshev2::Point(size_t N, int j, double a, double b) {
+  assert(j >= 0 && size_t(j) < N);
+  const double dtheta = M_PI / (N > 1 ? (N - 1) : 1);
+  // We add -PI so that we get values ordered from -1 to +1
+  // sin(-M_PI_2 + dtheta*j); also works
+  return a + (b - a) * (1. + cos(-M_PI + dtheta * j)) / 2;
+}
 
 Weights Chebyshev2::CalculateWeights(size_t N, double x, double a, double b) {
   // Allocate space for weights
@@ -32,7 +41,7 @@ Weights Chebyshev2::CalculateWeights(size_t N, double x, double a, double b) {
     const double dj =
         x - Point(N, j, a, b);  // only thing that depends on [a,b]
 
-    if (std::abs(dj) < 1e-10) {
+    if (std::abs(dj) < 1e-12) {
       // exceptional case: x coincides with a Chebyshev point
       weights.setZero();
       weights(j) = 1;
@@ -73,7 +82,7 @@ Weights Chebyshev2::DerivativeWeights(size_t N, double x, double a, double b) {
   for (size_t j = 0; j < N; j++) {
     const double dj =
         x - Point(N, j, a, b);  // only thing that depends on [a,b]
-    if (std::abs(dj) < 1e-10) {
+    if (std::abs(dj) < 1e-12) {
       // exceptional case: x coincides with a Chebyshev point
       weightDerivatives.setZero();
       // compute the jth row of the differentiation matrix for this point

@@ -75,9 +75,10 @@ class GTSAM_EXPORT Similarity3 : public LieGroup<Similarity3, 7> {
   bool operator==(const Similarity3& other) const;
 
   /// Print with optional string
-  void print(const std::string& s) const;
+  void print(const std::string& s = "") const;
 
-  friend std::ostream& operator<<(std::ostream& os, const Similarity3& p);
+  GTSAM_EXPORT friend std::ostream& operator<<(std::ostream& os,
+                                               const Similarity3& p);
 
   /// @}
   /// @name Group
@@ -132,7 +133,7 @@ class GTSAM_EXPORT Similarity3 : public LieGroup<Similarity3, 7> {
    * computed using the algorithm described here:
    * http://www5.informatik.uni-erlangen.de/Forschung/Publikationen/2005/Zinsser05-PSR.pdf
    */
-  static Similarity3 Align(const std::vector<Pose3Pair>& abPosePairs);
+  static Similarity3 Align(const Pose3Pairs& abPosePairs);
 
   /// @}
   /// @name Lie Group
@@ -201,6 +202,18 @@ class GTSAM_EXPORT Similarity3 : public LieGroup<Similarity3, 7> {
   /// @{
 
  private:
+
+  #if GTSAM_ENABLE_BOOST_SERIALIZATION
+    /** Serialization function */
+    friend class boost::serialization::access;
+    template<class Archive>
+    void serialize(Archive & ar, const unsigned int /*version*/) {
+      ar & BOOST_SERIALIZATION_NVP(R_);
+      ar & BOOST_SERIALIZATION_NVP(t_);
+      ar & BOOST_SERIALIZATION_NVP(s_);
+    }
+  #endif
+
   /// Calculate expmap and logmap coefficients.
   static Matrix3 GetV(Vector3 w, double lambda);
 

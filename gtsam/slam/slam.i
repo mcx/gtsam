@@ -7,12 +7,13 @@ namespace gtsam {
 #include <gtsam/geometry/Cal3DS2.h>
 #include <gtsam/geometry/SO4.h>
 #include <gtsam/navigation/ImuBias.h>
+#include <gtsam/geometry/Similarity3.h>
 
 // ######
 
 #include <gtsam/slam/BetweenFactor.h>
-template <T = {double, Vector, gtsam::Point2, gtsam::Point3, gtsam::Rot2, gtsam::SO3,
-               gtsam::SO4, gtsam::Rot3, gtsam::Pose2, gtsam::Pose3,
+template <T = {double, gtsam::Vector, gtsam::Point2, gtsam::Point3, gtsam::Rot2, gtsam::SO3,
+               gtsam::SO4, gtsam::Rot3, gtsam::Pose2, gtsam::Pose3, gtsam::Similarity3,
                gtsam::imuBias::ConstantBias}>
 virtual class BetweenFactor : gtsam::NoiseModelFactor {
   BetweenFactor(size_t key1, size_t key2, const T& relativePose,
@@ -20,6 +21,38 @@ virtual class BetweenFactor : gtsam::NoiseModelFactor {
   T measured() const;
 
   // enabling serialization functionality
+  void serialize() const;
+};
+
+#include <gtsam/slam/PlanarProjectionFactor.h>
+virtual class PlanarProjectionFactor1 : gtsam::NoiseModelFactor {
+  PlanarProjectionFactor1(
+    size_t poseKey,
+    const gtsam::Point3& landmark,
+    const gtsam::Point2& measured,
+    const gtsam::Pose3& bTc,
+    const gtsam::Cal3DS2& calib,
+    const gtsam::noiseModel::Base* model);
+  void serialize() const;
+};
+virtual class PlanarProjectionFactor2 : gtsam::NoiseModelFactor {
+  PlanarProjectionFactor2(
+    size_t poseKey,
+    size_t landmarkKey,
+    const gtsam::Point2& measured,
+    const gtsam::Pose3& bTc,
+    const gtsam::Cal3DS2& calib,
+    const gtsam::noiseModel::Base* model);
+  void serialize() const;
+};
+virtual class PlanarProjectionFactor3 : gtsam::NoiseModelFactor {
+  PlanarProjectionFactor3(
+    size_t poseKey,
+    size_t offsetKey,
+    size_t calibKey,
+    const gtsam::Point3& landmark,
+    const gtsam::Point2& measured,
+    const gtsam::noiseModel::Base* model);
   void serialize() const;
 };
 
@@ -106,7 +139,7 @@ typedef gtsam::GeneralSFMFactor<gtsam::PinholePose<gtsam::Cal3Unified>,
                                 gtsam::Point3>
     GeneralSFMFactorPoseCal3Unified;
 
-template <CALIBRATION = {gtsam::Cal3_S2, gtsam::Cal3DS2, gtsam::Cal3Bundler,
+template <CALIBRATION = {gtsam::Cal3_S2, gtsam::Cal3DS2, gtsam::Cal3f, gtsam::Cal3Bundler,
                          gtsam::Cal3Fisheye, gtsam::Cal3Unified}>
 virtual class GeneralSFMFactor2 : gtsam::NoiseModelFactor {
   GeneralSFMFactor2(const gtsam::Point2& measured,
@@ -156,6 +189,9 @@ virtual class SmartProjectionPoseFactor : gtsam::NonlinearFactor {
 
   // enabling serialization functionality
   void serialize() const;
+
+  gtsam::TriangulationResult point() const;
+  gtsam::TriangulationResult point(const gtsam::Values& values) const;
 };
 
 typedef gtsam::SmartProjectionPoseFactor<gtsam::Cal3_S2>
@@ -167,6 +203,20 @@ virtual class GenericStereoFactor : gtsam::NoiseModelFactor {
   GenericStereoFactor(const gtsam::StereoPoint2& measured,
                       const gtsam::noiseModel::Base* noiseModel, size_t poseKey,
                       size_t landmarkKey, const gtsam::Cal3_S2Stereo* K);
+  GenericStereoFactor(const gtsam::StereoPoint2& measured,
+                      const gtsam::noiseModel::Base* noiseModel, size_t poseKey,
+                      size_t landmarkKey, const gtsam::Cal3_S2Stereo* K,
+                      POSE body_P_sensor);
+
+  GenericStereoFactor(const gtsam::StereoPoint2& measured,
+                      const gtsam::noiseModel::Base* noiseModel, size_t poseKey,
+                      size_t landmarkKey, const gtsam::Cal3_S2Stereo* K,
+                      bool throwCheirality, bool verboseCheirality);
+  GenericStereoFactor(const gtsam::StereoPoint2& measured,
+                      const gtsam::noiseModel::Base* noiseModel, size_t poseKey,
+                      size_t landmarkKey, const gtsam::Cal3_S2Stereo* K,
+                      bool throwCheirality, bool verboseCheirality,
+                      POSE body_P_sensor);
   gtsam::StereoPoint2 measured() const;
   gtsam::Cal3_S2Stereo* calibration() const;
 
@@ -203,13 +253,53 @@ typedef gtsam::PoseRotationPrior<gtsam::Pose3> PoseRotationPrior3D;
 
 #include <gtsam/slam/EssentialMatrixFactor.h>
 virtual class EssentialMatrixFactor : gtsam::NoiseModelFactor {
-  EssentialMatrixFactor(size_t key, const gtsam::Point2& pA,
-                        const gtsam::Point2& pB,
-                        const gtsam::noiseModel::Base* noiseModel);
+  EssentialMatrixFactor(size_t key, 
+                        const gtsam::Point2& pA, const gtsam::Point2& pB,
+                        const gtsam::noiseModel::Base* model);
   void print(string s = "", const gtsam::KeyFormatter& keyFormatter =
                                 gtsam::DefaultKeyFormatter) const;
-  bool equals(const gtsam::EssentialMatrixFactor& other, double tol) const;
-  Vector evaluateError(const gtsam::EssentialMatrix& E) const;
+  gtsam::Vector evaluateError(const gtsam::EssentialMatrix& E) const;
+};
+
+virtual class EssentialMatrixFactor2 : gtsam::NoiseModelFactor {
+  EssentialMatrixFactor2(size_t key1, size_t key2, 
+                         const gtsam::Point2& pA, const gtsam::Point2& pB,
+                         const gtsam::noiseModel::Base* model);
+  void print(string s = "", const gtsam::KeyFormatter& keyFormatter =
+                                gtsam::DefaultKeyFormatter) const;
+  gtsam::Vector evaluateError(const gtsam::EssentialMatrix& E, double d) const;
+};
+
+virtual class EssentialMatrixFactor3 : gtsam::EssentialMatrixFactor2 {
+  EssentialMatrixFactor3(size_t key1, size_t key2, 
+                         const gtsam::Point2& pA, const gtsam::Point2& pB,
+                         const gtsam::Rot3& cRb, const gtsam::noiseModel::Base* model);
+  void print(string s = "", const gtsam::KeyFormatter& keyFormatter =
+                                gtsam::DefaultKeyFormatter) const;
+  gtsam::Vector evaluateError(const gtsam::EssentialMatrix& E, double d) const;
+};
+
+template <CALIBRATION = {gtsam::Cal3_S2, gtsam::Cal3DS2, gtsam::Cal3f, gtsam::Cal3Bundler,
+                         gtsam::Cal3Fisheye, gtsam::Cal3Unified}>
+virtual class EssentialMatrixFactor4 : gtsam::NoiseModelFactor {
+  EssentialMatrixFactor4(size_t keyE, size_t keyK,
+                         const gtsam::Point2& pA, const gtsam::Point2& pB,
+                         const gtsam::noiseModel::Base* model = nullptr);
+  void print(string s = "", const gtsam::KeyFormatter& keyFormatter =
+                                gtsam::DefaultKeyFormatter) const;
+  gtsam::Vector evaluateError(const gtsam::EssentialMatrix& E, const CALIBRATION& K) const;
+};
+
+template <CALIBRATION = {gtsam::Cal3_S2, gtsam::Cal3DS2, gtsam::Cal3f, gtsam::Cal3Bundler,
+                         gtsam::Cal3Fisheye, gtsam::Cal3Unified}>
+virtual class EssentialMatrixFactor5 : gtsam::NoiseModelFactor {
+  EssentialMatrixFactor5(size_t keyE, size_t keyKa, size_t keyKb,
+                         const gtsam::Point2& pA, const gtsam::Point2& pB,
+                         const gtsam::noiseModel::Base* model = nullptr);
+  void print(string s = "", const gtsam::KeyFormatter& keyFormatter =
+                                gtsam::DefaultKeyFormatter) const;
+  gtsam::Vector evaluateError(const gtsam::EssentialMatrix& E, 
+                              const CALIBRATION& Ka, const CALIBRATION& Kb) const;
 };
 
 #include <gtsam/slam/EssentialMatrixConstraint.h>
@@ -219,7 +309,7 @@ virtual class EssentialMatrixConstraint : gtsam::NoiseModelFactor {
   void print(string s = "", const gtsam::KeyFormatter& keyFormatter =
                                 gtsam::DefaultKeyFormatter) const;
   bool equals(const gtsam::EssentialMatrixConstraint& other, double tol) const;
-  Vector evaluateError(const gtsam::Pose3& p1, const gtsam::Pose3& p2) const;
+  gtsam::Vector evaluateError(const gtsam::Pose3& p1, const gtsam::Pose3& p2) const;
   const gtsam::EssentialMatrix& measured() const;
 };
 
@@ -251,7 +341,7 @@ void save2D(const gtsam::NonlinearFactorGraph& graph,
             string filename);
 
 // std::vector<gtsam::BetweenFactor<Pose2>::shared_ptr>
-// Ignored by pybind -> will be List[BetweenFactorPose2]
+// Used in Matlab wrapper
 class BetweenFactorPose2s {
   BetweenFactorPose2s();
   size_t size() const;
@@ -261,13 +351,14 @@ class BetweenFactorPose2s {
 gtsam::BetweenFactorPose2s parse2DFactors(string filename);
 
 // std::vector<gtsam::BetweenFactor<Pose3>::shared_ptr>
-// Ignored by pybind -> will be List[BetweenFactorPose3]
+// Used in Matlab wrapper
 class BetweenFactorPose3s {
   BetweenFactorPose3s();
   size_t size() const;
   gtsam::BetweenFactor<gtsam::Pose3>* at(size_t i) const;
   void push_back(const gtsam::BetweenFactor<gtsam::Pose3>* factor);
 };
+
 gtsam::BetweenFactorPose3s parse3DFactors(string filename);
 
 pair<gtsam::NonlinearFactorGraph*, gtsam::Values*> load3D(string filename);
@@ -317,7 +408,7 @@ virtual class FrobeniusFactor : gtsam::NoiseModelFactor {
   FrobeniusFactor(size_t key1, size_t key2);
   FrobeniusFactor(size_t key1, size_t key2, gtsam::noiseModel::Base* model);
 
-  Vector evaluateError(const T& R1, const T& R2);
+  gtsam::Vector evaluateError(const T& R1, const T& R2);
 };
 
 template <T = {gtsam::SO3, gtsam::SO4}>
@@ -326,13 +417,52 @@ virtual class FrobeniusBetweenFactor : gtsam::NoiseModelFactor {
   FrobeniusBetweenFactor(size_t key1, size_t key2, const T& R12,
                          gtsam::noiseModel::Base* model);
 
-  Vector evaluateError(const T& R1, const T& R2);
+  gtsam::Vector evaluateError(const T& R1, const T& R2);
 };
-  
+
+#include <gtsam/slam/TriangulationFactor.h>
+template <CAMERA>
+virtual class TriangulationFactor : gtsam::NoiseModelFactor {
+  TriangulationFactor();
+  TriangulationFactor(const CAMERA& camera, const gtsam::This::Measurement& measured,
+                      const gtsam::noiseModel::Base* model, gtsam::Key pointKey,
+                      bool throwCheirality = false,
+                      bool verboseCheirality = false);
+
+  void print(const string& s = "", const gtsam::KeyFormatter& keyFormatter =
+                                       gtsam::DefaultKeyFormatter) const;
+  bool equals(const This& p, double tol = 1e-9) const;
+
+  gtsam::Vector evaluateError(const gtsam::Point3& point) const;
+
+  const gtsam::This::Measurement& measured() const;
+};
+typedef gtsam::TriangulationFactor<gtsam::PinholeCamera<gtsam::Cal3_S2>>
+    TriangulationFactorCal3_S2;
+typedef gtsam::TriangulationFactor<gtsam::PinholeCamera<gtsam::Cal3DS2>>
+    TriangulationFactorCal3DS2;
+typedef gtsam::TriangulationFactor<gtsam::PinholeCamera<gtsam::Cal3Bundler>>
+    TriangulationFactorCal3Bundler;
+typedef gtsam::TriangulationFactor<gtsam::PinholeCamera<gtsam::Cal3Fisheye>>
+    TriangulationFactorCal3Fisheye;
+typedef gtsam::TriangulationFactor<gtsam::PinholeCamera<gtsam::Cal3Unified>>
+    TriangulationFactorCal3Unified;
+
+typedef gtsam::TriangulationFactor<gtsam::PinholePose<gtsam::Cal3_S2>>
+    TriangulationFactorPoseCal3_S2;
+typedef gtsam::TriangulationFactor<gtsam::PinholePose<gtsam::Cal3DS2>>
+    TriangulationFactorPoseCal3DS2;
+typedef gtsam::TriangulationFactor<gtsam::PinholePose<gtsam::Cal3Bundler>>
+    TriangulationFactorPoseCal3Bundler;
+typedef gtsam::TriangulationFactor<gtsam::PinholePose<gtsam::Cal3Fisheye>>
+    TriangulationFactorPoseCal3Fisheye;
+typedef gtsam::TriangulationFactor<gtsam::PinholePose<gtsam::Cal3Unified>>
+    TriangulationFactorPoseCal3Unified;
+
 #include <gtsam/slam/lago.h>
 namespace lago {
   gtsam::Values initialize(const gtsam::NonlinearFactorGraph& graph, bool useOdometricPath = true);
   gtsam::Values initialize(const gtsam::NonlinearFactorGraph& graph, const gtsam::Values& initialGuess);
 }
-  
+
 }  // namespace gtsam

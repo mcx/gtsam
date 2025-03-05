@@ -34,6 +34,8 @@ namespace gtsam {
 // Forward declares
 class Values;
 template<typename T> class ExpressionFactor;
+template<typename T> class ExpressionEqualityConstraint;
+class ScalarExpressionInequalityConstraint;
 
 namespace internal {
 template<typename T> class ExecutionTrace;
@@ -206,6 +208,8 @@ protected:
   // be very selective on who can access these private methods:
   friend class ExpressionFactor<T> ;
   friend class internal::ExpressionNode<T>;
+  friend class ExpressionEqualityConstraint<T>;
+  friend class ScalarExpressionInequalityConstraint;
 
   // and add tests
   friend class ::ExpressionFactorShallowTest;
@@ -218,7 +222,7 @@ protected:
 template <typename T>
 class ScalarMultiplyExpression : public Expression<T> {
   // Check that T is a vector space
-  GTSAM_CONCEPT_ASSERT(gtsam::IsVectorSpace<T>);
+  GTSAM_CONCEPT_ASSERT(IsVectorSpace<T>);
 
  public:
   explicit ScalarMultiplyExpression(double s, const Expression<T>& e);
@@ -231,7 +235,7 @@ class ScalarMultiplyExpression : public Expression<T> {
 template <typename T>
 class BinarySumExpression : public Expression<T> {
   // Check that T is a vector space
-  GTSAM_CONCEPT_ASSERT(gtsam::IsVectorSpace<T>);
+  GTSAM_CONCEPT_ASSERT(IsVectorSpace<T>);
 
  public:
   explicit BinarySumExpression(const Expression<T>& e1, const Expression<T>& e2);

@@ -42,7 +42,7 @@ namespace gtsam {
  * @ingroup slam
  */
 template <class CAMERA>
-class GTSAM_UNSTABLE_EXPORT SmartProjectionPoseFactorRollingShutter
+class SmartProjectionPoseFactorRollingShutter
     : public SmartProjectionFactor<CAMERA> {
  private:
   typedef SmartProjectionFactor<CAMERA> Base;
@@ -453,7 +453,7 @@ class GTSAM_UNSTABLE_EXPORT SmartProjectionPoseFactorRollingShutter
   }
 
  private:
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION  ///
+#if GTSAM_ENABLE_BOOST_SERIALIZATION  ///
   /// Serialization function
   friend class boost::serialization::access;
   template <class ARCHIVE>

@@ -18,6 +18,7 @@
 
 #include <vector>
 #include <limits>
+#include <cassert>
 
 #include <gtsam/inference/Ordering.h>
 #include <gtsam/3rdparty/CCOLAMD/Include/ccolamd.h>
@@ -279,6 +280,18 @@ void Ordering::print(const std::string& str,
   if (!endedOnNewline)
     cout << "\n";
   cout.flush();
+}
+
+/* ************************************************************************* */
+Ordering::This& Ordering::operator+=(Key key) {
+  this->push_back(key);
+  return *this;
+}
+
+/* ************************************************************************* */
+Ordering::This& Ordering::operator,(Key key) {
+  this->push_back(key);
+  return *this;
 }
 
 /* ************************************************************************* */

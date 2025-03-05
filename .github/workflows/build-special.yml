@@ -1,6 +1,17 @@
 name: Special Cases CI
 
-on: [pull_request]
+on:
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - '**.ipynb' 
+      - 'myst.yml'
+
+# Every time you make a push to your PR, it cancel immediately the previous checks,
+# and start a new one. The other runner will be available more quickly to your PR.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -12,7 +23,6 @@ jobs:
       CTEST_PARALLEL_LEVEL: 2
       CMAKE_BUILD_TYPE: ${{ matrix.build_type }}
       GTSAM_BUILD_UNSTABLE: ON
-      BOOST_VERSION: 1.67.0
 
     strategy:
       fail-fast: false
@@ -28,6 +38,8 @@ jobs:
             ubuntu-clang-cayleymap,
             ubuntu-clang-system-libs,
             ubuntu-no-boost,
+            ubuntu-no-unstable,
+            ubuntu-build-examples,
           ]
 
         build_type: [Debug, Release]
@@ -69,9 +81,21 @@ jobs:
             version: "14"
             flag: no_boost
 
+          - name: ubuntu-no-unstable
+            os: ubuntu-22.04
+            compiler: clang
+            version: "14"
+            flag: no_unstable
+
+          - name: ubuntu-build-examples
+            os: ubuntu-22.04
+            compiler: clang
+            version: "14"
+            flag: build_examples
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install (Linux)
         if: runner.os == 'Linux'
@@ -91,24 +115,35 @@ jobs:
             sudo add-apt-repository "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy main"
           fi
 
-          sudo apt-get -y install cmake build-essential pkg-config libpython3-dev python3-numpy libicu-dev
+          sudo apt-get -y install cmake build-essential pkg-config libpython3-dev python3-numpy libicu-dev ninja-build
 
-          sudo apt-get install -y clang-${{ matrix.version }} g++-multilib
-          echo "CC=clang-${{ matrix.version }}" >> $GITHUB_ENV
-          echo "CXX=clang++-${{ matrix.version }}" >> $GITHUB_ENV
-
-      - name: Install Boost
-        if: runner.os == 'Linux'
-        run: |
-          bash .github/scripts/boost.sh
+          if [ "${{ matrix.compiler }}" = "gcc" ]; then
+            sudo apt-get install -y g++-${{ matrix.version }} g++-${{ matrix.version }}-multilib
+            echo "CC=gcc-${{ matrix.version }}" >> $GITHUB_ENV
+            echo "CXX=g++-${{ matrix.version }}" >> $GITHUB_ENV
+          else
+            sudo apt-get install -y clang-${{ matrix.version }} g++-multilib
+            echo "CC=clang-${{ matrix.version }}" >> $GITHUB_ENV
+            echo "CXX=clang++-${{ matrix.version }}" >> $GITHUB_ENV
+          fi
 
       - name: Install (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install cmake ninja boost
+          brew install cmake ninja
           sudo xcode-select -switch /Applications/Xcode_${{ matrix.version }}.app
           echo "CC=clang" >> $GITHUB_ENV
           echo "CXX=clang++" >> $GITHUB_ENV
+
+      - name: Install Boost
+        run: |
+          if [ ${{matrix.flag}} != 'no_boost' ]; then
+            if [ ${{runner.os}} == 'Linux' ]; then
+              sudo apt-get -y install libboost-all-dev
+            elif [ ${{runner.os}} == 'macOS' ]; then
+              brew install boost
+            fi
+          fi
 
       - name: Set Allow Deprecated Flag
         if: matrix.flag == 'deprecated'
@@ -135,6 +170,11 @@ jobs:
           echo "GTSAM_ROT3_EXPMAP=OFF" >> $GITHUB_ENV
           echo "GTSAM Uses Cayley map for Rot3"
 
+      - name: Build Examples
+        if: matrix.flag == 'build_examples'
+        run: |
+          echo "GTSAM_BUILD_EXAMPLES_ALWAYS=ON" >> $GITHUB_ENV
+
       - name: Use system versions of 3rd party libraries
         if: matrix.flag == 'system'
         run: |
@@ -150,6 +190,18 @@ jobs:
           echo "GTSAM_ENABLE_BOOST_SERIALIZATION=OFF" >> $GITHUB_ENV
           echo "GTSAM_USE_BOOST_FEATURES=OFF" >> $GITHUB_ENV
           echo "GTSAM will not use BOOST"
+
+      - name: Turn off unstable
+        if: matrix.flag == 'no_unstable'
+        run: |
+          echo "GTSAM_BUILD_UNSTABLE=OFF" >> $GITHUB_ENV
+          echo "GTSAM 'unstable' will not be built."
+
+      - name: Set Swap Space
+        if: runner.os == 'Linux'
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 12
 
       - name: Build & Test
         run: |

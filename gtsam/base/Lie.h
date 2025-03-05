@@ -36,7 +36,7 @@ namespace gtsam {
 template <class Class, int N>
 struct LieGroup {
 
-  enum { dimension = N };
+  inline constexpr static auto dimension = N;
   typedef OptionalJacobian<N, N> ChartJacobian;
   typedef Eigen::Matrix<double, N, N> Jacobian;
   typedef Eigen::Matrix<double, N, 1> TangentVector;
@@ -183,7 +183,7 @@ struct LieGroupTraits: GetDimensionImpl<Class, Class::dimension> {
   /// @name Manifold
   /// @{
   typedef Class ManifoldType;
-  enum { dimension = Class::dimension };
+  inline constexpr static auto dimension = Class::dimension;
   typedef Eigen::Matrix<double, dimension, 1> TangentVector;
   typedef OptionalJacobian<dimension, dimension> ChartJacobian;
 
@@ -326,8 +326,9 @@ T expm(const Vector& x, int K=7) {
 template <typename T>
 T interpolate(const T& X, const T& Y, double t,
               typename MakeOptionalJacobian<T, T>::type Hx = {},
-              typename MakeOptionalJacobian<T, T>::type Hy = {}) {
-  if (Hx || Hy) {
+              typename MakeOptionalJacobian<T, T>::type Hy = {},
+              typename MakeOptionalJacobian<T, double>::type Ht = {}) {
+  if (Hx || Hy || Ht) {
     typename MakeJacobian<T, T>::type between_H_x, log_H, exp_H, compose_H_x;
     const T between =
         traits<T>::Between(X, Y, between_H_x);  // between_H_y = identity
@@ -338,6 +339,7 @@ T interpolate(const T& X, const T& Y, double t,
 
     if (Hx) *Hx = compose_H_x + t * exp_H * log_H * between_H_x;
     if (Hy) *Hy = t * exp_H * log_H;
+    if (Ht) *Ht = delta;
     return result;
   }
   return traits<T>::Compose(

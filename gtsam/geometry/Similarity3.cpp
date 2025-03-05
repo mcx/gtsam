@@ -45,7 +45,6 @@ static Point3Pairs subtractCentroids(const Point3Pairs &abPointPairs,
 static double calculateScale(const Point3Pairs &d_abPointPairs,
                              const Rot3 &aRb) {
   double x = 0, y = 0;
-  Point3 da, db;
   for (const auto& [da, db] : d_abPointPairs) {
     const Vector3 da_prime = aRb * db;
     y += da.transpose() * da_prime;
@@ -171,7 +170,7 @@ Similarity3 Similarity3::Align(const Point3Pairs &abPointPairs) {
   return internal::align(d_abPointPairs, aRb, centroids);
 }
 
-Similarity3 Similarity3::Align(const vector<Pose3Pair> &abPosePairs) {
+Similarity3 Similarity3::Align(const Pose3Pairs &abPosePairs) {
   const size_t n = abPosePairs.size();
   if (n < 2)
     throw std::runtime_error("input should have at least 2 pairs of poses");

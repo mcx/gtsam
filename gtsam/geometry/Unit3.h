@@ -53,9 +53,7 @@ private:
 
 public:
 
-  enum {
-    dimension = 2
-  };
+  inline constexpr static auto dimension = 2;
 
   /// @name Constructors
   /// @{
@@ -105,7 +103,8 @@ public:
   /// @name Testable
   /// @{
 
-  friend std::ostream& operator<<(std::ostream& os, const Unit3& pair);
+  GTSAM_EXPORT friend std::ostream& operator<<(std::ostream& os,
+                                               const Unit3& pair);
 
   /// The print fuction
   void print(const std::string& s = std::string()) const;
@@ -199,7 +198,7 @@ private:
 
   /// @name Advanced Interface
   /// @{
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
   /** Serialization function */
   friend class boost::serialization::access;
   template<class ARCHIVE>

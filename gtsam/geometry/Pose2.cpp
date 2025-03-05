@@ -20,6 +20,7 @@
 #include <gtsam/base/concepts.h>
 
 #include <cmath>
+#include <cassert>
 #include <iostream>
 #include <iomanip>
 
@@ -97,7 +98,7 @@ Vector3 Pose2::Logmap(const Pose2& p, OptionalJacobian<3, 3> H) {
 
 /* ************************************************************************* */
 Pose2 Pose2::ChartAtOrigin::Retract(const Vector3& v, ChartJacobian H) {
-#ifdef SLOW_BUT_CORRECT_EXPMAP
+#ifdef GTSAM_SLOW_BUT_CORRECT_EXPMAP
   return Expmap(v, H);
 #else
   if (H) {
@@ -109,7 +110,7 @@ Pose2 Pose2::ChartAtOrigin::Retract(const Vector3& v, ChartJacobian H) {
 }
 /* ************************************************************************* */
 Vector3 Pose2::ChartAtOrigin::Local(const Pose2& r, ChartJacobian H) {
-#ifdef SLOW_BUT_CORRECT_EXPMAP
+#ifdef GTSAM_SLOW_BUT_CORRECT_EXPMAP
   return Logmap(r, H);
 #else
   if (H) {

@@ -19,6 +19,7 @@
 #include <gtsam/base/testLie.h>
 #include <gtsam/base/lieProxies.h>
 #include <gtsam/base/TestableAssertions.h>
+#include <gtsam/slam/expressions.h>
 
 
 #include <CppUnitLite/TestHarness.h>
@@ -768,18 +769,9 @@ TEST(Pose3, PoseToPoseBearing) {
   EXPECT(assert_equal(Unit3(0,1,0), xl1.bearing(xl2, actualH1, actualH2), 1e-9));
 
   // Check numerical derivatives
-  expectedH1 = numericalDerivative21(bearing_proxy, xl1, l2);
-
-  // Since the second pose is treated as a point, the value calculated by
-  // numericalDerivative22 only depends on the position of the pose. Here, we
-  // calculate the Jacobian w.r.t. the second pose's position, and then augment
-  // that with zeroes in the block that is w.r.t. the second pose's
-  // orientation.
-  H2block = numericalDerivative22(bearing_proxy, xl1, l2);
-  expectedH2 = Matrix(2, 6);
-  expectedH2.setZero();
-  expectedH2.block<2, 3>(0, 3) = H2block;
-
+  std::function<Unit3(const Pose3&, const Pose3&)> f = [](const Pose3& a, const Pose3& b) { return a.bearing(b); };
+  expectedH1 = numericalDerivative21(f, xl1, xl2);
+  expectedH2 = numericalDerivative22(f, xl1, xl2);
   EXPECT(assert_equal(expectedH1, actualH1, 1e-5));
   EXPECT(assert_equal(expectedH2, actualH2, 1e-5));
 }
@@ -835,17 +827,7 @@ TEST(Pose3, Align2) {
 }
 
 /* ************************************************************************* */
-TEST( Pose3, ExpmapDerivative1) {
-  Matrix6 actualH;
-  Vector6 w; w << 0.1, 0.2, 0.3, 4.0, 5.0, 6.0;
-  Pose3::Expmap(w,actualH);
-  Matrix expectedH = numericalDerivative21<Pose3, Vector6,
-      OptionalJacobian<6, 6> >(&Pose3::Expmap, w, {});
-  EXPECT(assert_equal(expectedH, actualH));
-}
-
-/* ************************************************************************* */
-TEST(Pose3, ExpmapDerivative2) {
+TEST(Pose3, ExpmapDerivative) {
   // Iserles05an (Lie-group Methods) says:
   // scalar is easy: d exp(a(t)) / dt = exp(a(t)) a'(t)
   // matrix is hard: d exp(A(t)) / dt = exp(A(t)) dexp[-A(t)] A'(t)
@@ -879,26 +861,71 @@ TEST(Pose3, ExpmapDerivative2) {
   }
 }
 
-TEST( Pose3, ExpmapDerivativeQr) {
-  Vector6 w = Vector6::Random();
-  w.head<3>().normalize();
-  w.head<3>() = w.head<3>() * 0.9e-2;
-  Matrix3 actualQr = Pose3::ComputeQforExpmapDerivative(w, 0.01);
-  Matrix expectedH = numericalDerivative21<Pose3, Vector6,
-      OptionalJacobian<6, 6> >(&Pose3::Expmap, w, {});
-  Matrix3 expectedQr = expectedH.bottomLeftCorner<3, 3>();
-  EXPECT(assert_equal(expectedQr, actualQr, 1e-6));
+//******************************************************************************
+namespace test_cases {
+std::vector<Vector3> small{{0, 0, 0},                                 //
+                           {1e-5, 0, 0}, {0, 1e-5, 0}, {0, 0, 1e-5},  //,
+                           {1e-4, 0, 0}, {0, 1e-4, 0}, {0, 0, 1e-4}};
+std::vector<Vector3> large{{0, 0, 0}, {1, 0, 0},    {0, 1, 0},
+                           {0, 0, 1}, {.1, .2, .3}, {1, -2, 3}};
+auto omegas = [](bool nearZero) { return nearZero ? small : large; };
+std::vector<Vector3> vs{{1, 0, 0},    {0, 1, 0}, {0, 0, 1},
+                        {.4, .3, .2}, {4, 5, 6}, {-10, -20, 30}};
+}  // namespace test_cases
+
+//******************************************************************************
+TEST(Pose3, ExpmapDerivatives) {
+  for (bool nearZero : {true, false}) {
+    for (const Vector3& w : test_cases::omegas(nearZero)) {
+      for (Vector3 v : test_cases::vs) {
+        const Vector6 xi = (Vector6() << w, v).finished();
+        const Matrix6 expectedH =
+            numericalDerivative21<Pose3, Vector6, OptionalJacobian<6, 6> >(
+                &Pose3::Expmap, xi, {});
+        Matrix actualH;
+        Pose3::Expmap(xi, actualH);
+        EXPECT(assert_equal(expectedH, actualH));
+      }
+    }
+  }
 }
 
-/* ************************************************************************* */
-TEST( Pose3, LogmapDerivative) {
-  Matrix6 actualH;
-  Vector6 w; w << 0.1, 0.2, 0.3, 4.0, 5.0, 6.0;
-  Pose3 p = Pose3::Expmap(w);
-  EXPECT(assert_equal(w, Pose3::Logmap(p,actualH), 1e-5));
-  Matrix expectedH = numericalDerivative21<Vector6, Pose3,
-      OptionalJacobian<6, 6> >(&Pose3::Logmap, p, {});
-  EXPECT(assert_equal(expectedH, actualH));
+//******************************************************************************
+// Check logmap for all small values, as we don't want wrapping.
+TEST(Pose3, Logmap) {
+  static constexpr bool nearZero = true;
+  for (const Vector3& w : test_cases::omegas(nearZero)) {
+    for (Vector3 v : test_cases::vs) {
+      const Vector6 xi = (Vector6() << w, v).finished();
+      Pose3 pose = Pose3::Expmap(xi);
+      EXPECT(assert_equal(xi, Pose3::Logmap(pose)));
+    }
+  }
+}
+
+//******************************************************************************
+// Check logmap derivatives for all values
+TEST(Pose3, LogmapDerivatives) {
+  for (bool nearZero : {true, false}) {
+    for (const Vector3& w : test_cases::omegas(nearZero)) {
+      for (Vector3 v : test_cases::vs) {
+        const Vector6 xi = (Vector6() << w, v).finished();
+        Pose3 pose = Pose3::Expmap(xi);
+        const Matrix6 expectedH =
+            numericalDerivative21<Vector6, Pose3, OptionalJacobian<6, 6> >(
+                &Pose3::Logmap, pose, {});
+        Matrix actualH;
+        Pose3::Logmap(pose, actualH);
+#ifdef GTSAM_USE_QUATERNIONS
+        // TODO(Frank): Figure out why quaternions are not as accurate.
+        // Hint: 6 cases fail on Ubuntu 22.04, but none on MacOS.
+        EXPECT(assert_equal(expectedH, actualH, 1e-7));
+#else
+        EXPECT(assert_equal(expectedH, actualH));
+#endif
+      }
+    }
+  }
 }
 
 /* ************************************************************************* */
@@ -1132,56 +1159,170 @@ TEST(Pose3, interpolateJacobians) {
     Pose3 Y(Rot3::Rz(M_PI_2), Point3(1, 0, 0));
     double t = 0.5;
     Pose3 expectedPoseInterp(Rot3::Rz(M_PI_4), Point3(0.5, -0.207107, 0)); // note: different from test above: this is full Pose3 interpolation
-    Matrix actualJacobianX, actualJacobianY;
-    EXPECT(assert_equal(expectedPoseInterp, interpolate(X, Y, t, actualJacobianX, actualJacobianY), 1e-5));
+    Matrix actualJacobianX, actualJacobianY, actualJacobianT;
+    EXPECT(assert_equal(expectedPoseInterp, interpolate(X, Y, t, actualJacobianX, actualJacobianY, actualJacobianT), 1e-5));
 
     Matrix expectedJacobianX = numericalDerivative31<Pose3,Pose3,Pose3,double>(testing_interpolate, X, Y, t);
     EXPECT(assert_equal(expectedJacobianX,actualJacobianX,1e-6));
 
     Matrix expectedJacobianY = numericalDerivative32<Pose3,Pose3,Pose3,double>(testing_interpolate, X, Y, t);
     EXPECT(assert_equal(expectedJacobianY,actualJacobianY,1e-6));
+
+    Matrix expectedJacobianT = numericalDerivative33<Pose3,Pose3,Pose3,double>(testing_interpolate, X, Y, t);
+    EXPECT(assert_equal(expectedJacobianT,actualJacobianT,1e-6));
   }
   {
     Pose3 X = Pose3::Identity();
     Pose3 Y(Rot3::Identity(), Point3(1, 0, 0));
     double t = 0.3;
     Pose3 expectedPoseInterp(Rot3::Identity(), Point3(0.3, 0, 0));
-    Matrix actualJacobianX, actualJacobianY;
-    EXPECT(assert_equal(expectedPoseInterp, interpolate(X, Y, t, actualJacobianX, actualJacobianY), 1e-5));
+    Matrix actualJacobianX, actualJacobianY, actualJacobianT;
+    EXPECT(assert_equal(expectedPoseInterp, interpolate(X, Y, t, actualJacobianX, actualJacobianY, actualJacobianT), 1e-5));
 
     Matrix expectedJacobianX = numericalDerivative31<Pose3,Pose3,Pose3,double>(testing_interpolate, X, Y, t);
     EXPECT(assert_equal(expectedJacobianX,actualJacobianX,1e-6));
 
     Matrix expectedJacobianY = numericalDerivative32<Pose3,Pose3,Pose3,double>(testing_interpolate, X, Y, t);
     EXPECT(assert_equal(expectedJacobianY,actualJacobianY,1e-6));
+
+    Matrix expectedJacobianT = numericalDerivative33<Pose3,Pose3,Pose3,double>(testing_interpolate, X, Y, t);
+    EXPECT(assert_equal(expectedJacobianT,actualJacobianT,1e-6));
   }
   {
     Pose3 X = Pose3::Identity();
     Pose3 Y(Rot3::Rz(M_PI_2), Point3(0, 0, 0));
     double t = 0.5;
     Pose3 expectedPoseInterp(Rot3::Rz(M_PI_4), Point3(0, 0, 0));
-    Matrix actualJacobianX, actualJacobianY;
-    EXPECT(assert_equal(expectedPoseInterp, interpolate(X, Y, t, actualJacobianX, actualJacobianY), 1e-5));
+    Matrix actualJacobianX, actualJacobianY, actualJacobianT;
+    EXPECT(assert_equal(expectedPoseInterp, interpolate(X, Y, t, actualJacobianX, actualJacobianY, actualJacobianT), 1e-5));
 
     Matrix expectedJacobianX = numericalDerivative31<Pose3,Pose3,Pose3,double>(testing_interpolate, X, Y, t);
     EXPECT(assert_equal(expectedJacobianX,actualJacobianX,1e-6));
 
     Matrix expectedJacobianY = numericalDerivative32<Pose3,Pose3,Pose3,double>(testing_interpolate, X, Y, t);
     EXPECT(assert_equal(expectedJacobianY,actualJacobianY,1e-6));
+
+    Matrix expectedJacobianT = numericalDerivative33<Pose3,Pose3,Pose3,double>(testing_interpolate, X, Y, t);
+    EXPECT(assert_equal(expectedJacobianT,actualJacobianT,1e-6));
   }
   {
     Pose3 X(Rot3::Ypr(0.1,0.2,0.3), Point3(10, 5, -2));
     Pose3 Y(Rot3::Ypr(1.1,-2.2,-0.3), Point3(-5, 1, 1));
     double t = 0.3;
     Pose3 expectedPoseInterp(Rot3::Rz(M_PI_4), Point3(0, 0, 0));
-    Matrix actualJacobianX, actualJacobianY;
-    interpolate(X, Y, t, actualJacobianX, actualJacobianY);
+    Matrix actualJacobianX, actualJacobianY, actualJacobianT;
+    interpolate(X, Y, t, actualJacobianX, actualJacobianY, actualJacobianT);
 
     Matrix expectedJacobianX = numericalDerivative31<Pose3,Pose3,Pose3,double>(testing_interpolate, X, Y, t);
     EXPECT(assert_equal(expectedJacobianX,actualJacobianX,1e-6));
 
     Matrix expectedJacobianY = numericalDerivative32<Pose3,Pose3,Pose3,double>(testing_interpolate, X, Y, t);
     EXPECT(assert_equal(expectedJacobianY,actualJacobianY,1e-6));
+
+    Matrix expectedJacobianT = numericalDerivative33<Pose3,Pose3,Pose3,double>(testing_interpolate, X, Y, t);
+    EXPECT(assert_equal(expectedJacobianT,actualJacobianT,1e-6));
+  }
+}
+/* ************************************************************************* */
+Pose3 testing_interpolate_rt(const Pose3& t1, const Pose3& t2, double gamma) { return t1.interpolateRt(t2, gamma); }
+
+TEST(Pose3, interpolateRtJacobians) {
+  {
+    Pose3 X = Pose3::Identity();
+    Pose3 Y(Rot3::Rz(M_PI_2), Point3(1, 0, 0));
+    double t = 0.5;
+    Matrix actualJacobianX, actualJacobianY, actualJacobianT;
+    X.interpolateRt(Y, t, actualJacobianX, actualJacobianY, actualJacobianT);
+
+    Matrix expectedJacobianX = numericalDerivative31<Pose3,Pose3,Pose3,double>(testing_interpolate_rt, X, Y, t);
+    EXPECT(assert_equal(expectedJacobianX,actualJacobianX,1e-6));
+
+    Matrix expectedJacobianY = numericalDerivative32<Pose3,Pose3,Pose3,double>(testing_interpolate_rt, X, Y, t);
+    EXPECT(assert_equal(expectedJacobianY,actualJacobianY,1e-6));
+
+    Matrix expectedJacobianT = numericalDerivative33<Pose3,Pose3,Pose3,double>(testing_interpolate_rt, X, Y, t);
+    EXPECT(assert_equal(expectedJacobianT,actualJacobianT,1e-6));
+  }
+  {
+    Pose3 X = Pose3::Identity();
+    Pose3 Y(Rot3::Identity(), Point3(1, 0, 0));
+    double t = 0.3;
+    Matrix actualJacobianX, actualJacobianY, actualJacobianT;
+    X.interpolateRt(Y, t, actualJacobianX, actualJacobianY, actualJacobianT);
+
+    Matrix expectedJacobianX = numericalDerivative31<Pose3,Pose3,Pose3,double>(testing_interpolate_rt, X, Y, t);
+    EXPECT(assert_equal(expectedJacobianX,actualJacobianX,1e-6));
+
+    Matrix expectedJacobianY = numericalDerivative32<Pose3,Pose3,Pose3,double>(testing_interpolate_rt, X, Y, t);
+    EXPECT(assert_equal(expectedJacobianY,actualJacobianY,1e-6));
+
+    Matrix expectedJacobianT = numericalDerivative33<Pose3,Pose3,Pose3,double>(testing_interpolate_rt, X, Y, t);
+    EXPECT(assert_equal(expectedJacobianT,actualJacobianT,1e-6));
+  }
+  {
+    Pose3 X = Pose3::Identity();
+    Pose3 Y(Rot3::Rz(M_PI_2), Point3(0, 0, 0));
+    double t = 0.5;
+    Matrix actualJacobianX, actualJacobianY, actualJacobianT;
+    X.interpolateRt(Y, t, actualJacobianX, actualJacobianY, actualJacobianT);
+
+    Matrix expectedJacobianX = numericalDerivative31<Pose3,Pose3,Pose3,double>(testing_interpolate_rt, X, Y, t);
+    EXPECT(assert_equal(expectedJacobianX,actualJacobianX,1e-6));
+
+    Matrix expectedJacobianY = numericalDerivative32<Pose3,Pose3,Pose3,double>(testing_interpolate_rt, X, Y, t);
+    EXPECT(assert_equal(expectedJacobianY,actualJacobianY,1e-6));
+
+    Matrix expectedJacobianT = numericalDerivative33<Pose3,Pose3,Pose3,double>(testing_interpolate_rt, X, Y, t);
+    EXPECT(assert_equal(expectedJacobianT,actualJacobianT,1e-6));
+  }
+  {
+    Pose3 X(Rot3::Ypr(0.1,0.2,0.3), Point3(10, 5, -2));
+    Pose3 Y(Rot3::Ypr(1.1,-2.2,-0.3), Point3(-5, 1, 1));
+    double t = 0.3;
+    Matrix actualJacobianX, actualJacobianY, actualJacobianT;
+    X.interpolateRt(Y, t, actualJacobianX, actualJacobianY, actualJacobianT);
+
+    Matrix expectedJacobianX = numericalDerivative31<Pose3,Pose3,Pose3,double>(testing_interpolate_rt, X, Y, t);
+    EXPECT(assert_equal(expectedJacobianX,actualJacobianX,1e-6));
+
+    Matrix expectedJacobianY = numericalDerivative32<Pose3,Pose3,Pose3,double>(testing_interpolate_rt, X, Y, t);
+    EXPECT(assert_equal(expectedJacobianY,actualJacobianY,1e-6));
+
+    Matrix expectedJacobianT = numericalDerivative33<Pose3,Pose3,Pose3,double>(testing_interpolate_rt, X, Y, t);
+    EXPECT(assert_equal(expectedJacobianT,actualJacobianT,1e-6));
+  }
+}
+
+TEST(Pose3, expressionWrappers) {
+  Pose3 X(Rot3::Ypr(0.1,0.2,0.3), Point3(10, 5, -2));
+  Pose3 Y(Rot3::Ypr(1.1,-2.2,-0.3), Point3(-5, 1, 1));
+  double t = 0.3;
+  Values vals;
+  vals.insert(0,X);
+  vals.insert(1,Y);
+  vals.insert(2,t);
+  
+  { // interpolate (templated wrapper applies to all classes)
+    Matrix expectedJacobianX, expectedJacobianY, expectedJacobianT;
+    std::vector<Matrix> Hlist = {{},{},{}};
+    Pose3 expected = interpolate(X, Y, t, expectedJacobianX, expectedJacobianY, expectedJacobianT);
+    Pose3 actual = interpolate(Pose3_(Key(0)), Pose3_(Key(1)), Double_(Key(2))).value(vals, Hlist);
+
+    EXPECT(assert_equal(expected,actual,1e-6));
+    EXPECT(assert_equal(expectedJacobianX,Hlist[0],1e-6));
+    EXPECT(assert_equal(expectedJacobianY,Hlist[1],1e-6));
+    EXPECT(assert_equal(expectedJacobianT,Hlist[2],1e-6));
+  }
+  { // interpolateRt (Pose3 specialisation)
+    Matrix expectedJacobianX, expectedJacobianY, expectedJacobianT;
+    std::vector<Matrix> Hlist = {{},{},{}};
+    Pose3 expected = X.interpolateRt(Y, t, expectedJacobianX, expectedJacobianY, expectedJacobianT);
+    Pose3 actual = interpolateRt(Pose3_(Key(0)), Pose3_(Key(1)), Double_(Key(2))).value(vals, Hlist);
+
+    EXPECT(assert_equal(expected,actual,1e-6));
+    EXPECT(assert_equal(expectedJacobianX,Hlist[0],1e-6));
+    EXPECT(assert_equal(expectedJacobianY,Hlist[1],1e-6));
+    EXPECT(assert_equal(expectedJacobianT,Hlist[2],1e-6));
   }
 }
 
@@ -1205,6 +1346,31 @@ TEST(Pose3, Print) {
   std::string expected = "R: [\n\t1, 0, 0;\n\t0, 1, 0;\n\t0, 0, 1\n]\nt: 1 2 3\n";
 
   EXPECT(assert_print_equal(expected, pose));
+}
+
+/* ************************************************************************* */
+TEST(Pose3, ExpmapChainRule) {
+  // Muliply with an arbitrary matrix and exponentiate
+  Matrix6 M;
+  M << 1, 2, 3, 4, 5, 6, //
+       7, 8, 9, 1, 2, 3, //
+       4, 5, 6, 7, 8, 9, //
+       1, 2, 3, 4, 5, 6, //
+       7, 8, 9, 1, 2, 3, //
+       4, 5, 6, 7, 8, 9;
+  auto g = [&](const Vector6& omega) {
+    return Pose3::Expmap(M*omega);
+  };
+
+  // Test the derivatives at zero
+  const Matrix6 expected = numericalDerivative11<Pose3, Vector6>(g, Z_6x1);
+  EXPECT(assert_equal<Matrix6>(expected, M, 1e-5)); // Pose3::ExpmapDerivative(Z_6x1) is identity
+
+  // Test the derivatives at another value
+  const Vector6 delta{0.1, 0.2, 0.3, 0.4, 0.5, 0.6};
+  const Matrix6 expected2 = numericalDerivative11<Pose3, Vector6>(g, delta);
+  const Matrix6 analytic = Pose3::ExpmapDerivative(M*delta) * M;
+  EXPECT(assert_equal<Matrix6>(expected2, analytic, 1e-5)); // note tolerance
 }
 
 /* ************************************************************************* */

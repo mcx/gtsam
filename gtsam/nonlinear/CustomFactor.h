@@ -42,7 +42,7 @@ using CustomErrorFunction = std::function<Vector(const CustomFactor &, const Val
  *
  * This factor is mainly for creating a custom factor in Python.
  */
-class CustomFactor: public NoiseModelFactor {
+class GTSAM_EXPORT CustomFactor: public NoiseModelFactor {
 protected:
   CustomErrorFunction error_function_;
 
@@ -88,7 +88,7 @@ public:
 
 private:
 
-#ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
   /** Serialization function */
   friend class boost::serialization::access;
   template<class ARCHIVE>

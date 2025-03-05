@@ -41,15 +41,14 @@ class VectorValues;
  * parameters for iterative linear solvers
  */
 class IterativeOptimizationParameters {
-
-public:
-
+ public:
   typedef std::shared_ptr<IterativeOptimizationParameters> shared_ptr;
-  enum Verbosity {
-    SILENT = 0, COMPLEXITY, ERROR
-  } verbosity_;
+  enum Verbosity { SILENT = 0, COMPLEXITY, ERROR };
 
-public:
+ protected:
+  Verbosity verbosity_;
+
+ public:
 
   IterativeOptimizationParameters(Verbosity v = SILENT) :
       verbosity_(v) {
@@ -71,9 +70,12 @@ public:
   /* virtual print function */
   GTSAM_EXPORT virtual void print(std::ostream &os) const;
 
+  GTSAM_EXPORT virtual bool equals(const IterativeOptimizationParameters &other,
+                                   double tol = 1e-9) const;
+
   /* for serialization */
-  friend std::ostream& operator<<(std::ostream &os,
-      const IterativeOptimizationParameters &p);
+  GTSAM_EXPORT friend std::ostream &operator<<(
+      std::ostream &os, const IterativeOptimizationParameters &p);
 
   GTSAM_EXPORT static Verbosity verbosityTranslator(const std::string &s);
   GTSAM_EXPORT static std::string verbosityTranslator(Verbosity v);
